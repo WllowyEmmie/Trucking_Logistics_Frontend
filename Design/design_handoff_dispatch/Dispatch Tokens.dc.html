@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="dispatch-tokens.css">
+<style>*{box-sizing:border-box} body{margin:0;font-family:var(--font-sans);color:var(--ink);background:var(--surface-100);-webkit-font-smoothing:antialiased} a{color:var(--status-assigned);font-weight:600} a:hover{color:var(--ink)}</style>
+</helmet>
+<div style="max-width:1200px;padding:48px 32px 96px;display:flex;flex-direction:column;gap:56px">
+  <header style="display:flex;flex-direction:column;gap:12px">
+    <span class="t-label" style="color:var(--ink-muted)">Dispatch · shared tokens</span>
+    <h1 class="t-display-lg" style="margin:0">One set of tokens for three surfaces</h1>
+    <p class="t-body-lg" style="margin:0;max-width:62ch;color:var(--ink-muted);text-wrap:pretty">Customer tracking, driver app and dispatcher console read from the same sheet. Status has one representation everywhere. Colour is always paired with a text label.</p>
+    <nav style="display:flex;flex-wrap:wrap;gap:8px 24px;margin-top:8px">
+      <a href="Customer Tracking.dc.html">Customer tracking</a>
+      <a href="Driver App.dc.html">Driver app</a>
+      <a href="Dispatcher Console.dc.html">Dispatcher console</a>
+    </nav>
+  </header>
+
+  <section style="display:flex;flex-direction:column;gap:20px">
+    <h2 class="t-h1" style="margin:0">Status pills</h2>
+    <p class="t-body" style="margin:0;max-width:64ch;color:var(--ink-muted)">Text on its own tint, bounded by a 1px border in the status colour so the pill edge meets 3:1 on any surface. A filled dot marks a live or terminal state; a hollow dot marks waiting or inactive. Three sizes: sm for dense lists, md for panes, lg for customer and driver headers.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px">
+      <div style="display:flex;flex-direction:column;gap:12px;padding:20px;border:1px solid var(--border);border-radius:12px">
+        <span class="t-label" style="color:var(--ink-muted)">Delivery · 6</span>
+        <sc-for list="{{sizes}}" as="sz" hint-placeholder-count="3">
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <sc-for list="{{deliveryStatuses}}" as="st" hint-placeholder-count="6">
+              <dc-import name="StatusPill" status="{{st}}" size="{{sz}}" hint-size="96px,26px"></dc-import>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;padding:20px;border:1px solid var(--border);border-radius:12px">
+        <span class="t-label" style="color:var(--ink-muted)">Truck · 4</span>
+        <sc-for list="{{sizes}}" as="sz" hint-placeholder-count="3">
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <sc-for list="{{truckStatuses}}" as="st" hint-placeholder-count="4">
+              <dc-import name="StatusPill" status="{{st}}" size="{{sz}}" hint-size="96px,26px"></dc-import>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:28px">
+    <h2 class="t-h1" style="margin:0">Colour</h2>
+    <sc-for list="{{colorGroups}}" as="g" hint-placeholder-count="5">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <span class="t-label" style="color:var(--ink-muted)">{{g.name}}</span>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px">
+          <sc-for list="{{g.items}}" as="c" hint-placeholder-count="4">
+            <div style="display:flex;flex-direction:column;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface-100)">
+              <div style="height:56px;background:var({{c.v}});border-bottom:1px solid var(--divider)"></div>
+              <div style="padding:10px 12px;display:flex;flex-direction:column;gap:2px">
+                <span class="t-mono-sm" style="font-weight:600">{{c.v}}</span>
+                <span class="t-mono-sm" style="color:var(--ink-muted)">{{c.hex}}</span>
+                <span class="t-body-sm" style="color:var(--ink-muted)">{{c.note}}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <h2 class="t-h1" style="margin:0">Map markers on tiles</h2>
+    <p class="t-body" style="margin:0;max-width:64ch;color:var(--ink-muted)">Markers sit on OSM tiles, not on a system surface. Each gets a 2px white ring plus a dark edge so it holds 3:1 against land, road and water. Pickup is square, drop-off round, so shape carries kind as well as colour. A silent truck turns hollow, grey and dashed, and is always labelled.</p>
+    <div style="height:280px;border:1px solid var(--border);border-radius:12px;overflow:hidden">
+      <x-import component="DispatchMap" from="./map.js" stops="{{demoStops}}" trucks="{{demoTrucks}}" route="{{demoRoute}}" done-count="{{2}}" legend="{{true}}" seed="{{5}}" hint-size="100%,280px"></x-import>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:16px">
+    <h2 class="t-h1" style="margin:0">Type ramp</h2>
+    <div style="display:flex;flex-direction:column;border-top:1px solid var(--divider)">
+      <sc-for list="{{type}}" as="t" hint-placeholder-count="12">
+        <div style="display:grid;grid-template-columns:minmax(160px,220px) minmax(0,1fr);gap:24px;align-items:baseline;padding-block:14px;border-bottom:1px solid var(--divider)">
+          <div style="display:flex;flex-direction:column;gap:2px"><span class="t-mono" style="font-weight:600">.{{t.cls}}</span><span class="t-mono-sm" style="color:var(--ink-muted)">{{t.spec}}</span></div>
+          <span class="{{t.cls}}" style="overflow-wrap:anywhere">{{t.sample}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:40px">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <h2 class="t-h1" style="margin:0">Spacing</h2>
+      <sc-for list="{{spacing}}" as="s" hint-placeholder-count="7">
+        <div style="display:grid;grid-template-columns:96px 44px minmax(0,1fr);gap:12px;align-items:center">
+          <span class="t-mono">{{s.v}}</span><span class="t-mono" style="color:var(--ink-muted)">{{s.px}}</span>
+          <span style="height:12px;width:var({{s.v}});background:var(--ink);border-radius:2px"></span>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <h2 class="t-h1" style="margin:0">Radius</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:16px">
+        <sc-for list="{{radii}}" as="r" hint-placeholder-count="4">
+          <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
+            <span style="width:72px;height:48px;border:2px solid var(--ink);border-radius:var({{r.v}})"></span>
+            <span class="t-mono-sm">{{r.v}}</span><span class="t-mono-sm" style="color:var(--ink-muted)">{{r.px}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <h2 class="t-h1" style="margin:0">Accessibility floors</h2>
+      <sc-for list="{{floors}}" as="f" hint-placeholder-count="6">
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding-block:8px;border-bottom:1px solid var(--divider)">
+          <div style="display:flex;flex-direction:column"><span class="t-mono" style="font-weight:600">{{f.v}}</span><span class="t-body-sm" style="color:var(--ink-muted)">{{f.note}}</span></div>
+          <span class="t-mono">{{f.px}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:12px;max-width:72ch">
+    <h2 class="t-h1" style="margin:0">Two traps</h2>
+    <p class="t-body" style="margin:0"><strong>--ink-subtle</strong> fails 4.5:1 at body size. Use it at 18px+ or 14px bold+ only, never for text a person must read.</p>
+    <p class="t-body" style="margin:0"><strong>--divider</strong> fails 3:1. It separates list rows and nothing else. Any control boundary uses <strong>--border</strong>.</p>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const c = (v, hex, note) => ({ v, hex, note });
+    return {
+      sizes: ['sm', 'md', 'lg'],
+      deliveryStatuses: ['pending', 'assigned', 'in_transit', 'completed', 'cancelled', 'failed'],
+      truckStatuses: ['available', 'on_delivery', 'maintenance', 'offline'],
+      colorGroups: [
+        { name: 'Surfaces, ink and lines', items: [c('--surface-100', '#fafaf9', 'Page and pane ground'), c('--surface-200', '#f1f1ef', 'Headers, sunken rows'), c('--surface-300', '#e6e6e3', 'Canvas, pressed'), c('--ink', '#1a1d24', 'Primary text'), c('--ink-muted', '#555d6b', 'Secondary text, 4.5:1'), c('--ink-subtle', '#757d8a', '18px+ only'), c('--border', '#8a8a85', 'Control boundaries, 3:1'), c('--divider', '#dededa', 'Decorative rules only')] },
+        { name: 'Accent and focus', items: [c('--accent', '#8a5a00', 'State, not decoration'), c('--accent-bg', '#faf1de', 'Current stop tint'), c('--focus-ring', '#1f5b99', '2px focus outline')] },
+        { name: 'Delivery status', items: [c('--status-pending', '#555d6b', 'Pending'), c('--status-assigned', '#1f5b99', 'Assigned'), c('--status-transit', '#8a5a00', 'In transit'), c('--status-completed', '#1e6b47', 'Completed'), c('--status-cancelled', '#4a4a52', 'Cancelled'), c('--status-failed', '#a3281e', 'Failed')] },
+        { name: 'Truck status — aliases', items: [c('--truck-available', '= completed', 'Available'), c('--truck-busy', '= transit', 'On delivery'), c('--truck-maintenance', '= assigned', 'Maintenance'), c('--truck-offline', '= pending', 'Offline')] },
+        { name: 'Map tiles — fixed in both themes', items: [c('--map-land', '#f2efe9', 'Land'), c('--map-block', '#e8e2d6', 'Buildings'), c('--map-water', '#a9d0dc', 'Water'), c('--map-park', '#cfe5b8', 'Parks'), c('--map-primary', '#f7d49b', 'Primary roads'), c('--map-ink', '#1a1d24', 'Map label text'), c('--map-ink-muted', '#4a4f59', 'Stale label text'), c('--map-label-bg', '#ffffff', 'Map label ground')] },
+        { name: 'Board chrome — annotation only', items: [c('--board-canvas', '#dcdcd8', 'Canvas behind frames'), c('--ink-annotation', '#3d424c', 'Captions beside frames')] },
+        { name: 'Attention and agent', items: [c('--attention', '#a3281e', 'Exceptions'), c('--attention-bg', '#fbeae8', 'Exception row tint'), c('--agent', '#5c3d99', 'Agent-raised items only'), c('--agent-bg', '#f1edf9', 'Agent answer and proposal ground')] },
+      ],
+      demoStops: [{ n: 1, kind: 'pickup', x: .16, y: .7, done: true }, { n: 2, kind: 'dropoff', x: .42, y: .42, done: true }, { n: 3, kind: 'dropoff', x: .7, y: .3 }, { n: 4, kind: 'dropoff', x: .86, y: .66 }],
+      demoTrucks: [{ id: 'a', x: .56, y: .36, label: 'KF-12' }, { id: 'b', x: .3, y: .22, state: 'idle', label: 'KF-24' }, { id: 'c', x: .78, y: .5, state: 'stale', label: 'KF-19 · 26 min' }],
+      demoRoute: [[.16, .7], [.42, .42], [.56, .36], [.7, .3], [.86, .66]],
+      type: [
+        { cls: 't-display-lg', spec: '40/44 · 700', sample: '14:25' }, { cls: 't-display', spec: '30/34 · 700', sample: 'On the way to you' }, { cls: 't-h1', spec: '22/28 · 600', sample: 'Needs attention' },
+        { cls: 't-h2', spec: '17/24 · 600', sample: 'Ferreira Building Supplies' }, { cls: 't-h3', spec: '14/20 · 600', sample: 'Available trucks, nearest first' }, { cls: 't-body-lg', spec: '17/26 · 400', sample: 'The truck has made one other drop-off and is heading to you next.' },
+        { cls: 't-body', spec: '15/22 · 400', sample: 'KF-19 has sent no position for 26 minutes.' }, { cls: 't-body-sm', spec: '13/19 · 400', sample: 'Stop 2 of 4 · ETA 14:25' }, { cls: 't-label', spec: '11/14 · 600 · caps', sample: 'Estimated arrival' },
+        { cls: 't-mono', spec: 'mono 13/18', sample: 'DLV-40718  KF-12  13:58' }, { cls: 't-driver-address', spec: 'driver · 26/32 · 700', sample: 'Yard B, Canal Wharf, Stourton, Leeds LS10 1SL' }, { cls: 't-driver-action', spec: 'driver · 19/24 · 700', sample: 'Hold to confirm arrival' }, { cls: 't-driver-meta', spec: 'driver · 16/22 · 500', sample: 'GPS live · Online' },
+      ],
+      spacing: [1, 2, 3, 4, 5, 6, 7].map((n, i) => ({ v: '--space-' + n, px: [4, 8, 12, 16, 24, 32, 48][i] + 'px' })),
+      radii: [{ v: '--radius-sm', px: '4px' }, { v: '--radius-md', px: '8px' }, { v: '--radius-lg', px: '12px' }, { v: '--radius-pill', px: '999px' }],
+      floors: [
+        { v: '--target-min', px: '44px', note: 'Customer page and console' }, { v: '--target-driver', px: '56px', note: 'Driver app, root has .driver' }, { v: '--target-gap', px: '8px', note: 'Between adjacent targets' },
+        { v: '--target-gap-critical', px: '16px', note: 'Where a mis-tap changes state' }, { v: '--focus-width', px: '2px', note: 'Outline in --focus-ring' }, { v: '--pane-min', px: '280px', note: 'Console pane floor' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

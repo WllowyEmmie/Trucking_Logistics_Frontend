@@ -1,0 +1,15 @@
+{
+  "name": "Kestrel Freight · Driver",
+  "short_name": "Driver",
+  "description": "Today's stops, arrival and completion, problems and GPS for the cab.",
+  "start_url": "/driver",
+  "scope": "/driver",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fafaf9",
+  "theme_color": "#fafaf9",
+  "icons": [
+    { "src": "/driver-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/driver-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

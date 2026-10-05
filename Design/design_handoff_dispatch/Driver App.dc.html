@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="dispatch-tokens.css">
+<style>*{box-sizing:border-box} body{margin:0;font-family:var(--font-sans);background:var(--board-canvas);-webkit-font-smoothing:antialiased} a{color:var(--status-assigned)} a:hover{color:var(--ink)}</style>
+</helmet>
+<div dir="{{dir}}" style="padding:{{pad}};display:flex;flex-direction:{{rootDir}};align-items:flex-start;gap:{{rootGap}};color:var(--ink)">
+  <sc-if value="{{showChrome}}"><header style="display:flex;flex-direction:column;gap:8px;max-width:880px">
+    <span class="t-label" style="color:var(--ink-annotation)">Surface 2 · phone in a cab</span>
+    <h1 class="t-display-lg" style="margin:0">Driver app</h1>
+    <p class="t-body-lg" style="margin:0;color:var(--ink-annotation);text-wrap:pretty">Black on near-white for sunlight. Every target is 56px or more; anything that changes state sits 16px from its neighbours. One primary action per screen, always at the bottom within thumb reach. The top strip is always visible and always says whether GPS is reaching dispatch.</p>
+  </header></sc-if>
+
+  <section data-screen-label="Last stop" style="display:{{secDisplay}};flex-direction:column;gap:{{secGap}}">
+    <sc-if value="{{showChrome}}"><h2 class="t-h1" style="margin:0">Last stop and end of delivery</h2></sc-if>
+    <div style="display:{{secDisplay}};gap:40px;align-items:flex-start">
+      <sc-if value="{{show.f11}}"><figure style="order:{{ord.f11}};margin:0;width:390px;flex:none;display:flex;flex-direction:column;gap:12px">
+        <sc-if value="{{showChrome}}"><figcaption style="display:flex;flex-direction:column;gap:4px"><span class="t-h2"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:8px">11</span>Proof of delivery · live</span><span class="t-body-sm" style="color:var(--ink-annotation)">Only after "arrived", when the truck is parked, so typing is safe. The receiver's name is required and the photo optional; the hold stays disabled until there's a name. Needs a proof-of-delivery field on POST /complete, which the API doesn't have yet.</span></figcaption></sc-if>
+        <div class="driver {{themeClass}}" style="width:390px;height:844px;border:1px solid var(--border);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;background:var(--surface-100);color:var(--ink)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:8px 16px;background:var(--surface-200);border-bottom:1px solid var(--border)">
+            <span class="t-driver-meta" style="display:flex;align-items:center;gap:8px;font-weight:700"><span style="width:12px;height:12px;border-radius:999px;background:var(--status-completed)"></span>GPS live · 2 s ago</span>
+            <span class="t-driver-meta" style="font-weight:700">Online</span>
+          </div>
+          <div style="flex:1;overflow:auto;padding:20px 16px;display:flex;flex-direction:column;gap:20px">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="t-label" style="color:var(--ink-muted)">Stop 5 of 5 · Last drop-off</span><dc-import name="StatusPill" status="in_transit" label="Arrived 14:48" size="md" hint-size="120px,26px"></dc-import></div>
+              <span style="font-size:20px;line-height:26px;font-weight:700">Northgate Community Hall, Northgate, Otley LS21 1AA</span>
+            </div>
+            <label style="display:flex;flex-direction:column;gap:8px"><span class="t-driver-action">Who received it?</span><input value="{{pod.name}}" onChange="{{pod.onName}}" autocomplete="off" placeholder="Name" style="min-height:64px;padding:0 16px;border:2px solid var(--ink);border-radius:12px;font:500 20px var(--font-sans);color:var(--ink);background:var(--surface-100)"></label>
+            <button type="button" onClick="{{pod.onPhoto}}" class="t-driver-action" style="display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px;padding:0 16px;border:{{pod.photoBd}};border-radius:12px;background:{{pod.photoBg}};color:var(--ink);cursor:pointer;text-align:start"><span>{{pod.photoLabel}}</span><span class="t-driver-meta" style="color:var(--ink-muted)">{{pod.photoHint}}</span></button>
+          </div>
+          <div style="padding:16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px">
+            <div class="t-driver-action" style="width:100%;min-height:76px;border-radius:12px;background:var(--ink);color:var(--surface-100);display:flex;align-items:center;justify-content:center;opacity:{{pod.holdOpacity}}">Hold to complete delivery</div>
+            <span class="t-driver-meta" style="text-align:center;color:{{pod.hintColor}}">{{pod.hint}}</span>
+          </div>
+        </div>
+      </figure></sc-if>
+
+      <sc-if value="{{show.f12}}"><figure style="order:{{ord.f12}};margin:0;width:390px;flex:none;display:flex;flex-direction:column;gap:12px">
+        <sc-if value="{{showChrome}}"><figcaption style="display:flex;flex-direction:column;gap:4px"><span class="t-h2"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:8px">12</span>Delivery done</span><span class="t-body-sm" style="color:var(--ink-annotation)">A plain summary, then one action: go back to the depot. When dispatch assigns the next delivery, it replaces this screen.</span></figcaption></sc-if>
+        <div class="driver {{themeClass}}" style="width:390px;height:844px;border:1px solid var(--border);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;background:var(--surface-100);color:var(--ink)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:8px 16px;background:var(--surface-200);border-bottom:1px solid var(--border)">
+            <span class="t-driver-meta" style="display:flex;align-items:center;gap:8px;font-weight:700"><span style="width:12px;height:12px;border-radius:999px;background:var(--status-completed)"></span>GPS live · 5 s ago</span>
+            <span class="t-driver-meta" style="font-weight:700">Online · all sent</span>
+          </div>
+          <div style="flex:1;overflow:auto;padding:28px 16px;display:flex;flex-direction:column;gap:20px">
+            <dc-import name="StatusPill" status="completed" size="lg" hint-size="130px,34px"></dc-import>
+            <span class="t-display">Delivery done</span>
+            <span class="t-driver-meta">DLV-40718 · finished 14:52</span>
+            <dl style="margin:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px 16px;padding-block:16px;border-block:1px solid var(--divider)">
+              <dt class="t-driver-meta">Stops delivered</dt><dd class="t-driver-action" style="margin:0">4 of 4</dd>
+              <dt class="t-driver-meta">Problems reported</dt><dd class="t-driver-action" style="margin:0">None</dd>
+              <dt class="t-driver-meta">Started</dt><dd class="t-driver-action" style="margin:0">13:20</dd>
+            </dl>
+            <span class="t-driver-meta" style="color:var(--ink-muted)">No next delivery yet. Dispatch will send it here.</span>
+          </div>
+          <div style="padding:16px;border-top:1px solid var(--border)">
+            <a href="geo:0,0?q=Hollins+Industrial+Estate+Wakefield" role="button" class="t-driver-action" style="display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:72px;border-radius:12px;background:var(--ink);color:var(--surface-100);text-decoration:none"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>Navigate to depot</a>
+          </div>
+        </div>
+      </figure></sc-if>
+    </div>
+  </section>
+
+  <section data-screen-label="Contact client" style="display:{{secDisplay}};flex-direction:column;gap:{{secGap}}">
+    <sc-if value="{{showChrome}}"><h2 class="t-h1" style="margin:0">Contact client</h2></sc-if>
+    <div style="display:{{secDisplay}};gap:40px;align-items:flex-start">
+      <sc-if value="{{show.f10}}"><figure style="order:{{ord.f10}};margin:0;width:390px;flex:none;display:flex;flex-direction:column;gap:12px">
+        <sc-if value="{{showChrome}}"><figcaption style="display:flex;flex-direction:column;gap:4px"><span class="t-h2"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:8px">10</span>Contact client · live</span><span class="t-body-sm" style="color:var(--ink-annotation)">Opened from Call on the stop screen. Calling is the one primary action. Quick messages are a fixed list, sent as SMS with one tap, and each shows when it went. No typing while driving.</span></figcaption></sc-if>
+        <div class="driver {{themeClass}}" style="width:390px;height:844px;border:1px solid var(--border);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;background:var(--surface-100);color:var(--ink)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:8px 16px;background:var(--surface-200);border-bottom:1px solid var(--border)">
+            <span class="t-driver-meta" style="display:flex;align-items:center;gap:8px;font-weight:700"><span style="width:12px;height:12px;border-radius:999px;background:var(--status-completed)"></span>GPS live · 4 s ago</span>
+            <span class="t-driver-meta" style="font-weight:700">Online</span>
+          </div>
+          <div style="padding:12px 16px">
+            <button type="button" class="t-driver-meta" style="display:flex;align-items:center;gap:8px;padding:0 14px;border:2px solid var(--border);border-radius:12px;background:var(--surface-100);color:var(--ink);font-weight:700;cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>Stop 2</button>
+          </div>
+          <div style="flex:1;overflow:auto;padding:4px 16px 16px;display:flex;flex-direction:column;gap:20px">
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <span class="t-label" style="color:var(--ink-muted)">Deliver to</span>
+              <span class="t-display">Dele Harrow</span>
+              <span class="t-driver-meta">Yard office · Harrow &amp; Sons Timber</span>
+              <span class="t-driver-meta" style="color:var(--ink-muted)">+44 113 496 0777</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <span class="t-label" style="color:var(--ink-muted)">Quick message</span>
+              <sc-for list="{{msgs}}" as="m">
+                <button type="button" onClick="{{m.onSend}}" disabled="{{m.sent}}" class="t-driver-meta" style="display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px;padding:8px 16px;border:{{m.bd}};border-radius:12px;background:{{m.bg}};color:var(--ink);font-weight:700;text-align:start;cursor:pointer">
+                  <span>{{m.text}}</span><span class="t-driver-meta" style="flex:none;color:{{m.stateColor}}">{{m.state}}</span>
+                </button>
+              </sc-for>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--divider)">
+              <span class="t-label" style="color:var(--ink-muted)">No answer?</span>
+              <a href="tel:+441134960778" role="button" class="t-driver-meta" style="display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px;padding:8px 16px;border:2px solid var(--border);border-radius:12px;color:var(--ink);text-decoration:none;font-weight:700"><span>Call site reception</span><span style="color:var(--ink-muted);font-weight:500">Alternative contact</span></a>
+              <a href="tel:+441134960300" role="button" class="t-driver-meta" style="display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px;padding:8px 16px;border:2px solid var(--border);border-radius:12px;color:var(--ink);text-decoration:none;font-weight:700"><span>Call dispatch</span><span style="color:var(--ink-muted);font-weight:500">Kestrel Freight</span></a>
+            </div>
+          </div>
+          <div style="padding:16px;border-top:1px solid var(--border)">
+            <a href="tel:+441134960777" role="button" class="t-driver-action" style="display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:72px;border-radius:12px;background:var(--ink);color:var(--surface-100);text-decoration:none"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>Call Dele Harrow</a>
+          </div>
+        </div>
+      </figure></sc-if>
+    </div>
+  </section>
+
+  <section data-screen-label="Core screens" style="display:{{secDisplay}};flex-direction:column;gap:{{secGap}}">
+    <sc-if value="{{showChrome}}"><h2 class="t-h1" style="margin:0">Core screens</h2></sc-if>
+    <div style="display:{{secDisplay}};gap:40px;align-items:flex-start">
+
+      <sc-if value="{{show.f1}}"><figure style="order:{{ord.f1}};margin:0;width:390px;flex:none;display:flex;flex-direction:column;gap:12px">
+        <sc-if value="{{showChrome}}"><figcaption style="display:flex;flex-direction:column;gap:4px"><span class="t-h2"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:8px">1</span>Today</span><span class="t-body-sm" style="color:var(--ink-annotation)">Current stop is the only tinted, outlined row. Done stops recede to muted text with a check.</span></figcaption></sc-if>
+        <div class="driver {{themeClass}}" style="width:390px;height:844px;border:1px solid var(--border);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;background:var(--surface-100);color:var(--ink)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:8px 16px;background:var(--surface-200);border-bottom:1px solid var(--border)">
+            <span class="t-driver-meta" style="display:flex;align-items:center;gap:8px;font-weight:700"><span style="width:12px;height:12px;border-radius:999px;background:var(--status-completed)"></span>GPS live · 8 s ago</span>
+            <span class="t-driver-meta" style="font-weight:700">Online</span>
+          </div>
+          <div style="padding:20px 16px 12px;display:flex;flex-direction:column;gap:10px">
+            <span class="t-label" style="color:var(--ink-muted)">Delivery DLV-40718</span>
+            <span class="t-display">Stop 2 of 5</span>
+            <div role="img" aria-label="1 of 5 stops done" style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px">
+              <sc-for list="{{progress}}" as="p"><span style="height:10px;border-radius:2px;background:{{p.bg}};border:{{p.bd}}"></span></sc-for>
+            </div>
+          </div>
+          <ol style="list-style:none;margin:0;padding:4px 0 12px;flex:1;overflow:auto;display:flex;flex-direction:column;gap:4px">
+            <sc-for list="{{stops}}" as="s">
+              <li>
+                <sc-if value="{{s.isDone}}">
+                  <div style="display:grid;grid-template-columns:36px minmax(0,1fr);gap:12px;padding:10px 16px;color:var(--ink-muted)">
+                    <span style="width:32px;height:32px;border-radius:999px;background:var(--surface-300);display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg></span>
+                    <div style="display:flex;flex-direction:column;min-width:0"><span class="t-driver-meta">{{s.n}} · {{s.kind}} · {{s.time}}</span><span class="t-body" style="overflow-wrap:anywhere">{{s.addr}}</span></div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{s.isCurrent}}">
+                  <button type="button" style="display:grid;grid-template-columns:36px minmax(0,1fr);gap:12px;width:calc(100% - 24px);margin-inline:12px;padding:16px 12px;border:3px solid var(--accent);background:var(--accent-bg);border-radius:12px;color:var(--ink);font:inherit;text-align:start;cursor:pointer">
+                    <span style="width:36px;height:36px;border-radius:999px;background:var(--accent);color:var(--surface-100);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px">{{s.n}}</span>
+                    <span style="display:flex;flex-direction:column;gap:4px;min-width:0"><span class="t-label" style="color:var(--accent)">Now · {{s.kind}}</span><span style="font-size:20px;line-height:26px;font-weight:700;overflow-wrap:anywhere">{{s.addr}}</span><span class="t-driver-meta">{{s.contact}}</span></span>
+                  </button>
+                </sc-if>
+                <sc-if value="{{s.isTodo}}">
+                  <div style="display:grid;grid-template-columns:36px minmax(0,1fr);gap:12px;padding:10px 16px">
+                    <span style="width:32px;height:32px;border-radius:999px;border:2px solid var(--ink);display:flex;align-items:center;justify-content:center;font-weight:700">{{s.n}}</span>
+                    <div style="display:flex;flex-direction:column;min-width:0"><span class="t-driver-meta" style="color:var(--ink-muted)">{{s.kind}}</span><span class="t-body-lg" style="overflow-wrap:anywhere">{{s.addr}}</span></div>
+                  </div>
+                </sc-if>
+              </li>
+            </sc-for>
+          </ol>
+          <div style="padding:16px;border-top:1px solid var(--border)">
+            <button type="button" class="t-driver-action" style="width:100%;min-height:72px;border:0;border-radius:12px;background:var(--ink);color:var(--surface-100);cursor:pointer">Open stop 2</button>
+          </div>
+        </div>
+      </figure></sc-if>
+
+      <sc-if value="{{show.f2}}"><figure style="order:{{ord.f2}};margin:0;width:390px;flex:none;display:flex;flex-direction:column;gap:12px">
+        <sc-if value="{{showChrome}}"><figcaption style="display:flex;flex-direction:column;gap:4px"><span class="t-h2"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:8px">2</span>Current stop · live</span><span class="t-body-sm" style="color:var(--ink-annotation)">Try it: press and hold the black bar. Release early and it resets. Space or Enter held also works.</span></figcaption></sc-if>
+        <div class="driver {{themeClass}}" style="width:390px;height:844px;border:1px solid var(--border);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;background:var(--surface-100);color:var(--ink)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:8px 16px;background:var(--surface-200);border-bottom:1px solid var(--border)">
+            <span class="t-driver-meta" style="display:flex;align-items:center;gap:8px;font-weight:700"><span style="width:12px;height:12px;border-radius:999px;background:var(--status-completed)"></span>GPS live · 3 s ago</span>
+            <span class="t-driver-meta" style="font-weight:700">Online</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;gap:16px;padding:12px 16px">
+            <button type="button" class="t-driver-meta" style="display:flex;align-items:center;gap:8px;padding:0 14px;border:2px solid var(--border);border-radius:12px;background:var(--surface-100);color:var(--ink);font-weight:700;cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>All stops</button>
+            <button type="button" class="t-driver-meta" style="display:flex;align-items:center;gap:8px;padding:0 14px;border:2px solid var(--status-failed);border-radius:12px;background:var(--surface-100);color:var(--status-failed);font-weight:700;cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>Problem</button>
+          </div>
+          <div style="flex:1;overflow:auto;padding:8px 16px 16px;display:flex;flex-direction:column;gap:20px">
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="t-label" style="color:var(--ink-muted)">Stop 2 of 5 · Drop-off</span><sc-if value="{{live.chip}}"><dc-import name="StatusPill" status="{{live.chipStatus}}" label="{{live.chip}}" size="md" hint-size="120px,26px"></dc-import></sc-if></div>
+              <span class="t-driver-address" style="overflow-wrap:anywhere">Harrow &amp; Sons Timber, Yard B, Canal Wharf, Stourton, Leeds LS10 1SL</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px"><span class="t-label" style="color:var(--ink-muted)">Deliver to</span><span class="t-driver-meta" style="font-weight:700">Dele Harrow · yard office</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><span class="t-label" style="color:var(--ink-muted)">From dispatch</span><span class="t-driver-meta">Forklift on site. Yard gate closes 16:00.</span></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+              <a href="tel:+441134960777" role="button" class="t-driver-action" style="display:flex;align-items:center;justify-content:center;gap:10px;min-height:64px;border:2px solid var(--ink);border-radius:12px;color:var(--ink);text-decoration:none"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>Call</a>
+              <a href="geo:0,0?q=Canal+Wharf+Stourton+Leeds" role="button" class="t-driver-action" style="display:flex;align-items:center;justify-content:center;gap:10px;min-height:64px;border:2px solid var(--ink);border-radius:12px;color:var(--ink);text-decoration:none"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>Navigate</a>
+            </div>
+          </div>
+          <div style="padding:16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px">
+            <sc-if value="{{live.canHold}}">
+              <button type="button" onPointerDown="{{holdStart}}" onPointerUp="{{holdEnd}}" onPointerCancel="{{holdEnd}}" onKeyDown="{{holdKeyDown}}" onKeyUp="{{holdKeyUp}}" onContextMenu="{{prevent}}" aria-label="{{live.aria}}" style="position:relative;overflow:hidden;width:100%;min-height:76px;border:0;border-radius:12px;background:var(--ink);color:var(--surface-100);touch-action:none;user-select:none;-webkit-user-select:none;cursor:pointer;padding:0">
+                <span style="position:absolute;inset-block:0;inset-inline-start:0;width:{{live.pct}};background:var(--accent);transition:{{live.trans}}"></span>
+                <span class="t-driver-action" style="position:relative;display:flex;align-items:center;justify-content:center;gap:12px;color:var(--surface-100)">{{live.label}}</span>
+              </button>
+              <span class="t-driver-meta" style="text-align:center;color:{{live.hintColor}}">{{live.hint}}</span>
+            </sc-if>
+            <sc-if value="{{live.isDone}}">
+              <button type="button" onClick="{{resetLive}}" class="t-driver-action" style="width:100%;min-height:76px;border:0;border-radius:12px;background:var(--ink);color:var(--surface-100);cursor:pointer">Next: stop 3</button>
+              <span class="t-driver-meta" style="text-align:center;color:var(--ink-muted)">Stop 2 completed at 14:12</span>
+            </sc-if>
+          </div>
+        </div>
+      </figure></sc-if>
+
+      <sc-if value="{{show.f3}}"><figure style="order:{{ord.f3}};margin:0;width:390px;flex:none;display:flex;flex-direction:column;gap:12px">
+        <sc-if value="{{showChrome}}"><figcaption style="display:flex;flex-direction:column;gap:4px"><span class="t-h2"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:8px">3</span>Report a problem · live</span><span class="t-body-sm" style="color:var(--ink-annotation)">Fixed list, no free text. 64px rows, 8px apart; Send stays disabled until a reason is picked.</span></figcaption></sc-if>
+        <div class="driver {{themeClass}}" style="width:390px;height:844px;border:1px solid var(--border);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;background:var(--surface-100);color:var(--ink)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:8px 16px;background:var(--surface-200);border-bottom:1px solid var(--border)">
+            <span class="t-driver-meta" style="display:flex;align-items:center;gap:8px;font-weight:700"><span style="width:12px;height:12px;border-radius:999px;background:var(--status-completed)"></span>GPS live · 5 s ago</span>
+            <span class="t-driver-meta" style="font-weight:700">Online</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 16px">
+            <button type="button" class="t-driver-meta" style="display:flex;align-items:center;gap:8px;padding:0 14px;border:2px solid var(--border);border-radius:12px;background:var(--surface-100);color:var(--ink);font-weight:700;cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>Cancel</button>
+          </div>
+          <div style="flex:1;overflow:auto;padding:4px 16px 16px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;flex-direction:column;gap:4px"><span class="t-display">What's wrong?</span><span class="t-driver-meta" style="color:var(--ink-muted)">Stop 2 · Harrow &amp; Sons Timber</span></div>
+            <div role="radiogroup" aria-label="Problem" style="display:flex;flex-direction:column;gap:8px">
+              <sc-for list="{{reasons}}" as="r">
+                <button type="button" role="radio" aria-checked="{{r.on}}" onClick="{{r.pick}}" class="t-driver-action" style="display:flex;align-items:center;gap:14px;min-height:64px;padding:0 16px;border:{{r.bd}};border-radius:12px;background:{{r.bg}};color:var(--ink);text-align:start;cursor:pointer">
+                  <span style="width:26px;height:26px;border-radius:999px;border:3px solid var(--ink);display:flex;align-items:center;justify-content:center;flex:none"><span style="width:12px;height:12px;border-radius:999px;background:{{r.dot}}"></span></span>{{r.label}}
+                </button>
+              </sc-for>
+            </div>
+            <sc-if value="{{reasonNote}}"><p class="t-driver-meta" style="margin:0;padding:12px 14px;border-radius:8px;background:var(--status-failed-bg);border:1px solid var(--status-failed);color:var(--ink)">{{reasonNote}}</p></sc-if>
+          </div>
+          <div style="padding:16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px">
+            <button type="button" disabled="{{sendDisabled}}" onClick="{{send}}" class="t-driver-action" style="width:100%;min-height:72px;border:0;border-radius:12px;background:var(--ink);color:var(--surface-100);cursor:pointer;opacity:{{sendOpacity}}">{{sendLabel}}</button>
+            <span class="t-driver-meta" style="text-align:center;color:var(--ink-muted)">Dispatch calls you back after you send</span>
+          </div>
+        </div>
+      </figure></sc-if>
+    </div>
+  </section>
+
+  <section data-screen-label="Confirm control" style="display:{{secDisplay}};flex-direction:column;gap:{{secGap}}">
+    <sc-if value="{{showChrome}}"><h2 class="t-h1" style="margin:0">Confirm control: two candidates</h2></sc-if>
+    <div style="display:{{secDisplay}};gap:40px;align-items:flex-start">
+
+      <sc-if value="{{show.f4}}"><figure style="order:{{ord.f4}};margin:0;width:390px;flex:none;display:flex;flex-direction:column;gap:12px">
+        <sc-if value="{{showChrome}}"><figcaption style="display:flex;flex-direction:column;gap:4px"><span class="t-h2"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:8px">4</span>A · Press and hold, mid-hold</span><span class="t-body-sm" style="color:var(--ink-annotation)">0.8 s hold. Fill grows from the start edge, label changes, short vibration at the end. One control, no second target.</span></figcaption></sc-if>
+        <div class="driver {{themeClass}}" style="width:390px;height:844px;border:1px solid var(--border);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;background:var(--surface-100);color:var(--ink)">
+          <div style="flex:1;padding:24px 16px;display:flex;flex-direction:column;gap:10px">
+            <span class="t-label" style="color:var(--ink-muted)">Stop 2 of 5 · Drop-off</span>
+            <span class="t-driver-address">Harrow &amp; Sons Timber, Yard B, Canal Wharf, Stourton, Leeds LS10 1SL</span>
+          </div>
+          <div style="padding:16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px">
+            <div style="position:relative;overflow:hidden;width:100%;min-height:76px;border-radius:12px;background:var(--ink);display:flex;align-items:center;justify-content:center">
+              <span style="position:absolute;inset-block:0;inset-inline-start:0;width:60%;background:var(--accent)"></span>
+              <span class="t-driver-action" style="position:relative;color:var(--surface-100)">Keep holding…</span>
+            </div>
+            <span class="t-driver-meta" style="text-align:center;color:var(--ink-muted)">Hold for about a second</span>
+          </div>
+        </div>
+      </figure></sc-if>
+
+      <sc-if value="{{show.f5}}"><figure style="order:{{ord.f5}};margin:0;width:390px;flex:none;display:flex;flex-direction:column;gap:12px">
+        <sc-if value="{{showChrome}}"><figcaption style="display:flex;flex-direction:column;gap:4px"><span class="t-h2"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:8px">5</span>B · Slide, with tap alternative</span><span class="t-body-sm" style="color:var(--ink-annotation)">SC 2.5.7 needs a non-drag route, so a tap button sits 16px below the track. It opens a confirm sheet instead of acting directly.</span></figcaption></sc-if>
+        <div class="driver {{themeClass}}" style="width:390px;height:844px;border:1px solid var(--border);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;background:var(--surface-100);color:var(--ink)">
+          <div style="flex:1;padding:24px 16px;display:flex;flex-direction:column;gap:10px">
+            <span class="t-label" style="color:var(--ink-muted)">Stop 2 of 5 · Drop-off</span>
+            <span class="t-driver-address">Harrow &amp; Sons Timber, Yard B, Canal Wharf, Stourton, Leeds LS10 1SL</span>
+          </div>
+          <div style="padding:16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:16px">
+            <div role="slider" aria-label="Slide to confirm arrival" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="position:relative;min-height:76px;border-radius:12px;background:var(--surface-300);border:2px solid var(--ink);display:flex;align-items:center;justify-content:center">
+              <span style="position:absolute;inset-inline-start:6px;top:6px;bottom:6px;width:72px;border-radius:8px;background:var(--ink);display:flex;align-items:center;justify-content:center;color:var(--surface-100)"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 17 5-5-5-5"></path><path d="m13 17 5-5-5-5"></path></svg></span>
+              <span class="t-driver-action" style="padding-inline-start:72px">Slide to confirm arrival</span>
+            </div>
+            <button type="button" class="t-driver-action" style="width:100%;min-height:60px;border:2px solid var(--ink);border-radius:12px;background:var(--surface-100);color:var(--ink);cursor:pointer">Tap to confirm instead</button>
+          </div>
+        </div>
+      </figure></sc-if>
+
+      <sc-if value="{{show.f6}}"><figure style="order:{{ord.f6}};margin:0;width:390px;flex:none;display:flex;flex-direction:column;gap:12px">
+        <sc-if value="{{showChrome}}"><figcaption style="display:flex;flex-direction:column;gap:4px"><span class="t-h2"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:8px">6</span>B · Tap alternative sheet</span><span class="t-body-sm" style="color:var(--ink-annotation)">Yes sits higher than the button that opened the sheet, so a double tap lands on Not yet, not on Yes.</span></figcaption></sc-if>
+        <div class="driver {{themeClass}}" style="position:relative;width:390px;height:844px;border:1px solid var(--border);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;background:var(--surface-300);color:var(--ink)">
+          <div role="dialog" aria-label="Confirm arrival" style="background:var(--surface-100);border-top:2px solid var(--ink);border-radius:20px 20px 0 0;padding:24px 16px 16px;display:flex;flex-direction:column;gap:16px">
+            <span class="t-display">Arrived at stop 2?</span>
+            <span class="t-driver-meta">Harrow &amp; Sons Timber, Yard B, Canal Wharf, Stourton, Leeds LS10 1SL</span>
+            <button type="button" class="t-driver-action" style="width:100%;min-height:76px;border:0;border-radius:12px;background:var(--ink);color:var(--surface-100);cursor:pointer;margin-top:8px">Yes, I've arrived</button>
+            <button type="button" class="t-driver-action" style="width:100%;min-height:64px;border:2px solid var(--ink);border-radius:12px;background:var(--surface-100);color:var(--ink);cursor:pointer">Not yet</button>
+          </div>
+        </div>
+      </figure></sc-if>
+
+      <sc-if value="{{showChrome}}"><div style="width:390px;flex:none;display:flex;flex-direction:column;gap:14px;padding:24px;background:var(--surface-100);border:2px solid var(--ink);border-radius:12px;margin-top:44px">
+        <span class="t-label" style="color:var(--ink-muted)">Recommendation</span>
+        <span class="t-h1">Ship A, press and hold</span>
+        <p class="t-body" style="margin:0">It meets SC 2.5.7 on its own: holding is not dragging, and one pointer does it. That keeps one control per screen.</p>
+        <p class="t-body" style="margin:0">A slide needs a steady horizontal drag, which is hard with gloves on a vibrating mount. Its required tap alternative then adds a second target and a second step, so the fast route is the hard one and the easy route is slow.</p>
+        <p class="t-body" style="margin:0">Hold is hard to trigger by brushing the screen, since a release under 0.8 s resets it, and it takes under a second on purpose. Keyboard and switch users hold Space or Enter. Screen reader users get a double-tap-and-hold, which VoiceOver and TalkBack both pass through as a long press.</p>
+      </div></sc-if>
+    </div>
+  </section>
+
+  <section data-screen-label="Honest states" style="display:{{secDisplay}};flex-direction:column;gap:{{secGap}}">
+    <sc-if value="{{showChrome}}"><h2 class="t-h1" style="margin:0">Offline, paused, empty</h2></sc-if>
+    <div style="display:{{secDisplay}};gap:40px;align-items:flex-start">
+
+      <sc-if value="{{show.f7}}"><figure style="order:{{ord.f7}};margin:0;width:390px;flex:none;display:flex;flex-direction:column;gap:12px">
+        <sc-if value="{{showChrome}}"><figcaption style="display:flex;flex-direction:column;gap:4px"><span class="t-h2"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:8px">7</span>Offline, actions queued</span><span class="t-body-sm" style="color:var(--ink-annotation)">The strip inverts and states the queue depth. Queued actions are listed with the time they happened, not the time they send.</span></figcaption></sc-if>
+        <div class="driver {{themeClass}}" style="width:390px;height:844px;border:1px solid var(--border);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;background:var(--surface-100);color:var(--ink)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:8px 16px;background:var(--ink);color:var(--surface-100)">
+            <span class="t-driver-meta" style="display:flex;align-items:center;gap:8px;font-weight:700"><span style="width:12px;height:12px;border-radius:999px;background:var(--surface-100)"></span>GPS recording</span>
+            <span class="t-driver-meta" style="display:flex;align-items:center;gap:8px;font-weight:700"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01"></path><path d="M8.5 16.429a5 5 0 0 1 7 0"></path><path d="M5 12.859a10 10 0 0 1 5.17-2.69"></path><path d="M19 12.859a10 10 0 0 0-2.007-1.523"></path><path d="M2 8.82a15 15 0 0 1 4.177-2.643"></path><path d="M22 8.82a15 15 0 0 0-11.288-3.764"></path><path d="m2 2 20 20"></path></svg>Offline · 2 waiting</span>
+          </div>
+          <div style="flex:1;overflow:auto;padding:20px 16px;display:flex;flex-direction:column;gap:20px">
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="t-label" style="color:var(--ink-muted)">Stop 2 of 5 · Drop-off</span><dc-import name="StatusPill" status="in_transit" label="Arrived 14:06 · not sent" size="md" hint-size="160px,26px"></dc-import></div>
+              <span class="t-driver-address">Harrow &amp; Sons Timber, Yard B, Canal Wharf, Stourton, Leeds LS10 1SL</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px;padding:16px;border:2px solid var(--ink);border-radius:12px">
+              <span class="t-h2">Waiting to send · 2</span>
+              <ol style="margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:6px" class="t-driver-meta">
+                <li>Arrived at stop 2 — 14:06</li>
+                <li>38 GPS positions since 13:59</li>
+              </ol>
+              <span class="t-body" style="color:var(--ink-muted)">Sends by itself when signal returns. Closing the app doesn't lose them.</span>
+            </div>
+          </div>
+          <div style="padding:16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px">
+            <div style="width:100%;min-height:76px;border-radius:12px;background:var(--ink);color:var(--surface-100);display:flex;align-items:center;justify-content:center" class="t-driver-action">Hold to complete stop</div>
+            <span class="t-driver-meta" style="text-align:center;color:var(--ink-muted)">Works offline — it joins the queue</span>
+          </div>
+        </div>
+      </figure></sc-if>
+
+      <sc-if value="{{show.f8}}"><figure style="order:{{ord.f8}};margin:0;width:390px;flex:none;display:flex;flex-direction:column;gap:12px">
+        <sc-if value="{{showChrome}}"><figcaption style="display:flex;flex-direction:column;gap:4px"><span class="t-h2"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:8px">8</span>Tracking paused</span><span class="t-body-sm" style="color:var(--ink-annotation)">Shown once, after unlock, per gap. Not a modal, no sound. It clears at the next stop confirmation; the strip keeps the fact visible until then.</span></figcaption></sc-if>
+        <div class="driver {{themeClass}}" style="width:390px;height:844px;border:1px solid var(--border);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;background:var(--surface-100);color:var(--ink)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:8px 16px;background:var(--surface-200);border-bottom:1px solid var(--border)">
+            <span class="t-driver-meta" style="display:flex;align-items:center;gap:8px;font-weight:700"><span style="width:12px;height:12px;border-radius:999px;background:var(--status-completed)"></span>GPS live · gap 11 min</span>
+            <span class="t-driver-meta" style="font-weight:700">Online</span>
+          </div>
+          <div style="flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:20px">
+            <div role="status" style="display:flex;flex-direction:column;gap:10px;padding:16px;border:2px solid var(--status-transit);background:var(--accent-bg);border-radius:12px">
+              <span class="t-h1">Location paused for 11 minutes</span>
+              <span class="t-driver-meta">Your phone stopped sharing location from 13:31 to 13:42 while the screen was locked. Dispatch sees a gap on the map.</span>
+              <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:4px">
+                <button type="button" class="t-driver-meta" style="flex:1 1 180px;min-height:56px;padding:0 14px;border:2px solid var(--ink);border-radius:12px;background:var(--surface-100);color:var(--ink);font-weight:700;cursor:pointer">Keep screen on</button>
+                <button type="button" class="t-driver-meta" style="flex:0 1 100px;min-height:56px;padding:0 14px;border:2px solid var(--border);border-radius:12px;background:transparent;color:var(--ink);font-weight:700;cursor:pointer">OK</button>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px"><span class="t-label" style="color:var(--ink-muted)">Delivery DLV-40718</span><span class="t-display">Stop 2 of 5</span></div>
+            <div style="display:flex;flex-direction:column;gap:4px;padding:16px 12px;border:3px solid var(--accent);background:var(--accent-bg);border-radius:12px">
+              <span class="t-label" style="color:var(--accent)">Now · Drop-off</span>
+              <span style="font-size:20px;line-height:26px;font-weight:700">Harrow &amp; Sons Timber, Yard B, Canal Wharf, Stourton, Leeds LS10 1SL</span>
+            </div>
+          </div>
+          <div style="padding:16px;border-top:1px solid var(--border)">
+            <button type="button" class="t-driver-action" style="width:100%;min-height:72px;border:0;border-radius:12px;background:var(--ink);color:var(--surface-100);cursor:pointer">Open stop 2</button>
+          </div>
+        </div>
+      </figure></sc-if>
+
+      <sc-if value="{{show.f9}}"><figure style="order:{{ord.f9}};margin:0;width:390px;flex:none;display:flex;flex-direction:column;gap:12px">
+        <sc-if value="{{showChrome}}"><figcaption style="display:flex;flex-direction:column;gap:4px"><span class="t-h2"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:8px">9</span>Empty — no delivery assigned</span><span class="t-body-sm" style="color:var(--ink-annotation)">No primary action, because there is nothing to do. GPS still reports so dispatch can see the truck is free.</span></figcaption></sc-if>
+        <div class="driver {{themeClass}}" style="width:390px;height:844px;border:1px solid var(--border);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;background:var(--surface-100);color:var(--ink)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:8px 16px;background:var(--surface-200);border-bottom:1px solid var(--border)">
+            <span class="t-driver-meta" style="display:flex;align-items:center;gap:8px;font-weight:700"><span style="width:12px;height:12px;border-radius:999px;background:var(--status-completed)"></span>GPS live · 6 s ago</span>
+            <span class="t-driver-meta" style="font-weight:700">Online</span>
+          </div>
+          <div style="flex:1;padding:32px 16px;display:flex;flex-direction:column;gap:14px">
+            <span class="t-label" style="color:var(--ink-muted)">KF-12 · Priya Nair</span>
+            <span class="t-display">No delivery yet</span>
+            <span class="t-driver-meta" style="max-width:32ch">Dispatch will send your next delivery here. You don't need to refresh.</span>
+          </div>
+          <div style="padding:16px;border-top:1px solid var(--border)">
+            <a href="tel:+441134960300" role="button" class="t-driver-action" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:64px;border:2px solid var(--ink);border-radius:12px;color:var(--ink);text-decoration:none">Call dispatch</a>
+          </div>
+        </div>
+      </figure></sc-if>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;dark&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;dir&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;ltr&quot;,&quot;rtl&quot;],&quot;default&quot;:&quot;ltr&quot;,&quot;tsType&quot;:&quot;'ltr'|'rtl'&quot;}}">
+const HOLD = 800;
+const STOPS = [
+  { n: 1, kind: 'Pickup', addr: 'Kestrel Freight depot, Unit 4, Hollins Industrial Estate, Wakefield WF2 0XT', st: 'done', time: 'Done 13:32' },
+  { n: 2, kind: 'Drop-off', addr: 'Harrow & Sons Timber, Yard B, Canal Wharf, Stourton, Leeds LS10 1SL', st: 'current', contact: 'Dele Harrow · 4.2 km' },
+  { n: 3, kind: 'Drop-off', addr: 'Ferreira Building Supplies — goods-in bay 3 (rear entrance off Carr Lane), 1180 Marlow Road, Leeds LS12 6HP', st: 'todo' },
+  { n: 4, kind: 'Drop-off', addr: '14 Brook St, Ilkley LS29 8DE', st: 'todo' },
+  { n: 5, kind: 'Drop-off', addr: 'Northgate Community Hall, Northgate, Otley LS21 1AA', st: 'todo' },
+];
+const REASONS = [['breakdown', 'Breakdown'], ['customer_unavailable', 'Customer unavailable'], ['goods_damaged', 'Goods damaged'], ['accident', 'Accident'], ['other', 'Other']];
+class Component extends DCLogic {
+  state = { stage: 0, prog: 0, holding: false, hint: null, reason: null, sent: false };
+  componentWillUnmount() { if (this.raf) cancelAnimationFrame(this.raf); }
+  begin() {
+    if (this.raf || this.state.stage >= 2) return;
+    this.t0 = performance.now();
+    const tick = () => {
+      const p = Math.min(1, (performance.now() - this.t0) / HOLD);
+      this.setState({ prog: p, holding: true });
+      if (p >= 1) { this.raf = null; try { navigator.vibrate && navigator.vibrate(40); } catch (e) {} this.setState(s => ({ stage: s.stage + 1, prog: 0, holding: false, hint: null })); return; }
+      this.raf = requestAnimationFrame(tick);
+    };
+    this.raf = requestAnimationFrame(tick);
+  }
+  end() {
+    if (!this.raf) return;
+    cancelAnimationFrame(this.raf); this.raf = null;
+    this.setState({ prog: 0, holding: false, hint: 'Keep holding until the bar fills' });
+  }
+  renderVals() {
+    const { stage, prog, holding, hint, reason, sent } = this.state;
+    const base = ['Hold to confirm arrival', 'Hold to complete stop'][stage] || '';
+    const scr = this.props.screens ? String(this.props.screens).split(',').map(s => s.trim()) : null;
+    const show = {}; const ord = {}; for (let i = 1; i <= 12; i++) { show['f' + i] = !scr || scr.includes(String(i)); ord['f' + i] = scr ? scr.indexOf(String(i)) : 0; }
+    return {
+      show, ord: Object.fromEntries(Array.from({ length: 12 }, (_, i) => ['f' + (i + 1), scr ? Math.max(0, scr.indexOf(String(i + 1))) : 0])),
+      showChrome: !scr, pad: scr ? '0' : '48px', rootGap: scr ? '40px' : '64px', secGap: scr ? '0' : '20px', secDisplay: scr ? 'contents' : 'flex', rootDir: scr ? 'row' : 'column',
+      dir: this.props.dir ?? 'ltr',
+      themeClass: this.props.dark ? 'dark' : '',
+      progress: [0, 1, 2, 3, 4].map(i => ({ bg: i < 1 ? 'var(--ink)' : i === 1 ? 'var(--accent)' : 'var(--surface-300)', bd: i > 1 ? '1px solid var(--border)' : '0' })),
+      stops: STOPS.map(s => ({ ...s, isDone: s.st === 'done', isCurrent: s.st === 'current', isTodo: s.st === 'todo' })),
+      live: {
+        canHold: stage < 2, isDone: stage >= 2,
+        label: holding ? 'Keep holding…' : base, aria: base + '. Press and hold.',
+        pct: Math.round(prog * 100) + '%', trans: holding ? 'none' : 'width .2s ease-out',
+        hint: hint || (stage === 1 ? 'Arrived 14:06 — hold again when unloaded' : 'Hold for about a second'),
+        hintColor: hint ? 'var(--ink)' : 'var(--ink-muted)',
+        chip: stage === 1 ? 'Arrived 14:06' : stage === 2 ? 'Completed 14:12' : null, chipStatus: stage === 2 ? 'completed' : 'in_transit',
+      },
+      holdStart: e => { if (e.button && e.button !== 0) return; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (x) {} this.begin(); },
+      holdEnd: () => this.end(),
+      holdKeyDown: e => { if ((e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); if (!e.repeat) this.begin(); } },
+      holdKeyUp: e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); this.end(); } },
+      prevent: e => e.preventDefault(),
+      resetLive: () => this.setState({ stage: 0, prog: 0, hint: null }),
+      reasons: REASONS.map(([k, label]) => ({ label, on: reason === k ? 'true' : 'false', bd: reason === k ? '3px solid var(--ink)' : '2px solid var(--border)', bg: reason === k ? 'var(--surface-300)' : 'var(--surface-100)', dot: reason === k ? 'var(--ink)' : 'transparent', pick: () => this.setState({ reason: k, sent: false }) })),
+      reasonNote: reason === 'accident' ? 'If anyone is hurt, call emergency services first. Then send this.' : null,
+      pod: (() => { const n = (this.state.podName || '').trim(), ph = !!this.state.podPhoto; return {
+        name: this.state.podName || '', onName: e => this.setState({ podName: e.target.value }), onPhoto: () => this.setState(s => ({ podPhoto: !s.podPhoto })),
+        photoLabel: ph ? 'Photo added' : 'Add a photo', photoHint: ph ? 'Tap to remove' : 'Optional', photoBd: ph ? '2px solid var(--status-completed)' : '2px solid var(--border)', photoBg: ph ? 'var(--status-completed-bg)' : 'var(--surface-100)',
+        holdOpacity: n ? 1 : .45, hint: n ? 'Hold for about a second' : 'Enter who received it first', hintColor: n ? 'var(--ink-muted)' : 'var(--ink)' }; })(),
+      msgs: ['On my way — about 10 minutes', "I've arrived at the gate", "I can't find the entrance", 'Running late — new time on the tracking link'].map((text, i) => {
+        const sent = this.state.sentMsgs && this.state.sentMsgs[i];
+        return { text, sent: !!sent, state: sent ? 'Sent ' + sent : 'Send', stateColor: sent ? 'var(--status-completed)' : 'var(--ink-muted)', bd: sent ? '2px solid var(--status-completed)' : '2px solid var(--ink)', bg: sent ? 'var(--status-completed-bg)' : 'var(--surface-100)',
+          onSend: () => this.setState(s => ({ sentMsgs: { ...(s.sentMsgs || {}), [i]: '14:0' + (3 + i) } })) };
+      }),
+      sendDisabled: !reason, sendOpacity: reason ? 1 : .45,
+      sendLabel: sent ? 'Sent — dispatch will call' : 'Send report',
+      send: () => this.setState({ sent: true }),
+    };
+  }
+}
+</script>
+</body>
+</html>

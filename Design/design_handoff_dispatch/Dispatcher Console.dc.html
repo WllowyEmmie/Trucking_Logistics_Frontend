@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="dispatch-tokens.css">
+<style>*{box-sizing:border-box} body{margin:0;font-family:var(--font-sans);background:var(--board-canvas);color:var(--ink);-webkit-font-smoothing:antialiased} a{color:var(--status-assigned)} a:hover{color:var(--ink)}</style>
+</helmet>
+<div style="padding:48px;display:flex;flex-direction:column;gap:64px">
+  <header style="display:flex;flex-direction:column;gap:8px;max-width:960px">
+    <span class="t-label" style="color:var(--ink-annotation)">Surface 3 · desktop, one shift</span>
+    <h1 class="t-display-lg" style="margin:0">Dispatcher console</h1>
+    <p class="t-body-lg" style="margin:0;color:var(--ink-annotation);text-wrap:pretty">Every frame is live. Click deliveries, trucks, markers, chips and counts; expand a row with its chevron; ask a question; approve a proposal. Markers glide between pings at constant speed over each 10 s interval, so the shown position trails the latest report by at most one ping instead of jumping.</p>
+  </header>
+
+  <section data-screen-label="Live console" style="display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;flex-direction:column;gap:4px;max-width:960px"><h2 class="t-h1" style="margin:0"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:10px">1</span>Populated default</h2><span class="t-body" style="color:var(--ink-annotation)">A delivery selected and expanded in place: ordered stops with filled dots for done, the event timeline, route and truck lit on the map. Exceptions sit in a compact table in the header; the agent-raised row carries the violet Agent marker instead of Rule.</span></div>
+    <div style="width:1440px;height:900px;border:1px solid var(--border);overflow:hidden"><dc-import name="ConsoleView" scenario="live" height="900px" hint-size="1440px,900px"></dc-import></div>
+  </section>
+
+  <section data-screen-label="Assign flow" style="display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;flex-direction:column;gap:4px;max-width:960px"><h2 class="t-h1" style="margin:0"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:10px">2</span>Assign flow, inline</h2><span class="t-body" style="color:var(--ink-annotation)">Pending delivery expanded. Available trucks are listed by distance to pickup and all enlarge on the map; hovering or focusing a candidate draws a dashed line to the pickup. Assign changes the pill in place and logs the event. No modal, so the map stays in view. Try KF-25 first: it returns a 409 because another dispatcher just took it. The server's message is shown word for word and the list refreshes.</span></div>
+    <div style="width:1440px;height:900px;border:1px solid var(--border);overflow:hidden"><dc-import name="ConsoleView" scenario="assign" height="900px" hint-size="1440px,900px"></dc-import></div>
+  </section>
+
+  <section data-screen-label="Agent proposal and ask" style="display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;flex-direction:column;gap:4px;max-width:960px"><h2 class="t-h1" style="margin:0"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:10px">3</span>Agent: proposal and inline answer</h2><span class="t-body" style="color:var(--ink-annotation)">The proposals pane is opened with one proposal: what it would do, why, the before and after, and Approve / Reject 16px apart. The ask box has answered above the list; each answer row selects that delivery. No chat thread, no history of turns.</span></div>
+    <div style="width:1440px;height:900px;border:1px solid var(--border);overflow:hidden"><dc-import name="ConsoleView" scenario="proposal" height="900px" hint-size="1440px,900px"></dc-import></div>
+  </section>
+
+  <section data-screen-label="Empty start of shift" style="display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;flex-direction:column;gap:4px;max-width:960px"><h2 class="t-h1" style="margin:0"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:10px">4</span>Empty: start of shift</h2><span class="t-body" style="color:var(--ink-annotation)">No deliveries yet. Counts read zero, the exception table says nothing needs attention, and the proposals pane is opened to show its empty state, which is how it will look most of the time. New delivery opens an inline form above the list, never a modal. Creating drops the delivery in as Pending, selected and expanded, so the assign panel is right there.</span></div>
+    <div style="width:1440px;height:900px;border:1px solid var(--border);overflow:hidden"><dc-import name="ConsoleView" scenario="empty" height="900px" hint-size="1440px,900px"></dc-import></div>
+  </section>
+
+  <section data-screen-label="200% text" style="display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;flex-direction:column;gap:4px;max-width:960px"><h2 class="t-h1" style="margin:0"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:10px">5</span>Zoomed to 200%</h2><span class="t-body" style="color:var(--ink-annotation)">A 1440px screen at 200% gives a 720px CSS viewport. Panes become tabs, the exception table reflows into stacked rows with the same fields, and the delivery list keeps every value; nothing clips or truncates. Shown at 2× scale.</span></div>
+    <div style="width:1440px;height:1800px;border:1px solid var(--border);overflow:hidden;background:var(--surface-200)">
+      <div style="width:720px;transform:scale(2);transform-origin:0 0"><dc-import name="ConsoleView" scenario="narrow" hint-size="720px,900px"></dc-import></div>
+    </div>
+  </section>
+
+  <section data-screen-label="Night shift" style="display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;flex-direction:column;gap:4px;max-width:960px"><h2 class="t-h1" style="margin:0"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:10px">6</span>Night shift, dark theme</h2><span class="t-body" style="color:var(--ink-annotation)">Same tokens under the .dark class; every status pair keeps its contrast. The map stays on light tiles, because markers are tuned against OSM tiles. A dark tile set would need its own marker check.</span></div>
+    <div style="width:1440px;height:900px;border:1px solid var(--border);overflow:hidden"><dc-import name="ConsoleView" scenario="live" dark="{{true}}" height="900px" hint-size="1440px,900px"></dc-import></div>
+  </section>
+
+  <section data-screen-label="Right to left" style="display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;flex-direction:column;gap:4px;max-width:960px"><h2 class="t-h1" style="margin:0"><span class="t-mono" style="background:var(--ink);color:var(--surface-100);padding:2px 8px;border-radius:4px;margin-inline-end:10px">7</span>Right-to-left</h2><span class="t-body" style="color:var(--ink-annotation)">dir="rtl" on the root. Panes, chips and row layouts mirror through logical properties, so the delivery list sits on the right and the proposals rail on the left. The map is not mirrored, because geography doesn't flip. The strings are left in English here so the layout change is easy to see.</span></div>
+    <div style="width:1440px;height:900px;border:1px solid var(--border);overflow:hidden"><dc-import name="ConsoleView" scenario="assign" dir="rtl" height="900px" hint-size="1440px,900px"></dc-import></div>
+  </section>
+</div>
+</x-dc>
+</body>
+</html>

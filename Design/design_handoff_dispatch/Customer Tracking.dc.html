@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="dispatch-tokens.css">
+<style>*{box-sizing:border-box} body{margin:0;font-family:var(--font-sans);color:var(--ink);background:var(--board-canvas);-webkit-font-smoothing:antialiased} a{color:var(--status-assigned)} a:hover{color:var(--ink)}</style>
+</helmet>
+<div dir="{{dir}}" class="{{rootClass}}" style="padding:{{pad}};display:flex;flex-direction:column;gap:{{rootGap}};color:var(--ink)">
+  <sc-if value="{{showChrome}}"><header style="display:flex;flex-direction:column;gap:8px;max-width:900px">
+    <span class="t-label" style="color:var(--ink-annotation)">Surface 1 · public, no login</span>
+    <h1 class="t-display-lg" style="margin:0;color:var(--ink)">Customer tracking</h1>
+    <p class="t-body-lg" style="margin:0;color:var(--ink-annotation);text-wrap:pretty">Each state at 375px and 1440px. The phone visitor is abroad, so their times are shifted to CEST and marked; the desktop visitor is the receiving site manager in the operator's own zone, so nothing is marked. Other customers' stops on a multi-drop run show no address.</p>
+  </header></sc-if>
+
+  <sc-for list="{{states}}" as="s" hint-placeholder-count="8">
+    <section data-screen-label="{{s.label}}" style="display:flex;flex-direction:column;gap:20px">
+      <sc-if value="{{s.chrome}}"><div style="display:flex;align-items:baseline;gap:16px;flex-wrap:wrap">
+        <span class="t-mono" style="font-weight:600;background:var(--ink);color:var(--surface-100);padding:4px 10px;border-radius:4px">{{s.badge}}</span>
+        <h2 class="t-h1" style="margin:0;color:var(--ink)">{{s.label}}</h2>
+        <span class="t-body" style="color:var(--ink-annotation);max-width:70ch">{{s.why}}</span>
+      </div></sc-if>
+      <div style="display:flex;gap:48px;align-items:flex-start">
+
+        <!-- PHONE 375 --><sc-if value="{{s.showPhone}}">
+        <div style="width:375px;flex:none;background:var(--surface-100);border:1px solid var(--border);border-radius:28px;overflow:hidden;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;min-height:56px;border-bottom:1px solid var(--divider)">
+            <div style="display:flex;flex-direction:column;min-width:0"><span class="t-h3">{{s.p.operator}}</span><span class="t-mono-sm" style="color:var(--ink-muted)">{{s.p.ref}}</span></div>
+            <sc-if value="{{s.p.hasPill}}"><dc-import name="StatusPill" status="{{s.p.pill}}" size="md" hint-size="96px,26px"></dc-import></sc-if>
+          </div>
+          <sc-if value="{{s.p.hasMap}}">
+            <div style="height:325px;position:relative;border-bottom:1px solid var(--border)">
+              <x-import component="DispatchMap" from="./map.js" stops="{{s.p.map.stops}}" trucks="{{s.p.map.trucks}}" route="{{s.p.map.route}}" done-count="{{s.p.map.doneCount}}" note="{{s.p.map.note}}" dim="{{s.p.map.dim}}" seed="{{3}}" hint-size="100%,325px"></x-import>
+            </div>
+          </sc-if>
+          <div style="padding:20px 16px 24px;display:flex;flex-direction:column;gap:24px">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <h3 class="t-display" style="margin:0">{{s.p.headline}}</h3>
+              <p class="t-body" style="margin:0;color:var(--ink-muted);text-wrap:pretty">{{s.p.sub}}</p>
+              <sc-if value="{{s.p.updated}}"><span class="t-body-sm" style="color:var(--ink-muted);font-weight:600">{{s.p.updated}}</span></sc-if>
+            </div>
+            <sc-if value="{{s.p.notice}}">
+              <div role="status" style="display:flex;gap:12px;padding:16px;border-radius:8px;background:{{s.p.notice.bg}};border:1px solid {{s.p.notice.fg}}">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:{{s.p.notice.fg}};margin-top:1px"><circle cx="12" cy="12" r="10"></circle><path d="M12 7v5l3 2"></path></svg>
+                <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+                  <span class="t-h2">{{s.p.notice.title}}</span>
+                  <span class="t-body">{{s.p.notice.body}}</span>
+                  <sc-if value="{{s.p.notice.next}}"><span class="t-h3" style="margin-top:8px">What happens next</span><span class="t-body">{{s.p.notice.next}}</span></sc-if>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{s.p.eta}}">
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <span class="t-label" style="color:var(--ink-muted)">{{s.p.eta.label}}</span>
+                <div style="display:flex;flex-wrap:wrap;align-items:baseline;column-gap:10px"><span class="t-display">{{s.p.eta.value}}</span><sc-if value="{{s.p.tzTag}}"><span class="t-label" style="color:var(--status-assigned);border:1px solid var(--status-assigned);border-radius:4px;padding:2px 6px">{{s.p.tzTag}}</span></sc-if></div>
+                <span class="t-body" style="color:var(--ink-muted)">{{s.p.eta.detail}}</span>
+              </div>
+            </sc-if>
+            <sc-if value="{{s.p.hasStops}}">
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <span class="t-label" style="color:var(--ink-muted)">Stops</span>
+                <ol style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column">
+                  <sc-for list="{{s.p.stops}}" as="st">
+                    <li style="display:grid;grid-template-columns:20px minmax(0,1fr);column-gap:12px">
+                      <div style="display:flex;flex-direction:column;align-items:center">
+                        <span style="width:16px;height:16px;border-radius:999px;margin-top:2px;flex:none;background:{{st.dotBg}};border:{{st.dotBorder}}"></span>
+                        <span style="flex:1;width:2px;background:var(--border);margin-block:4px;opacity:{{st.lineOp}}"></span>
+                      </div>
+                      <div style="padding-bottom:18px;display:flex;flex-direction:column;gap:2px;min-width:0">
+                        <span class="t-label" style="color:{{st.labelColor}}">{{st.label}}</span>
+                        <span class="t-body" style="font-weight:{{st.mainWeight}};overflow-wrap:anywhere">{{st.main}}</span>
+                        <span class="t-body-sm" style="font-weight:600;color:{{st.timeColor}}">{{st.time}}</span>
+                      </div>
+                    </li>
+                  </sc-for>
+                </ol>
+              </div>
+            </sc-if>
+            <sc-if value="{{s.p.hasHistory}}">
+              <div style="display:flex;flex-direction:column;border-top:1px solid var(--divider);padding-top:8px">
+                <button type="button" onClick="{{s.toggle}}" aria-expanded="{{s.open}}" style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:none;border:0;padding:0;color:var(--ink);font:inherit;cursor:pointer;text-align:start">
+                  <span class="t-h3">{{s.p.histLabel}}</span>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transform:{{s.chev}}"><path d="m6 9 6 6 6-6"></path></svg>
+                </button>
+                <sc-if value="{{s.open}}">
+                  <ol style="list-style:none;margin:0;padding:0">
+                    <sc-for list="{{s.p.history}}" as="e">
+                      <li style="display:grid;grid-template-columns:8.5em minmax(0,1fr);gap:8px;padding-block:8px;border-bottom:1px solid var(--divider)"><span class="t-mono" style="color:var(--ink-muted)">{{e.t}}</span><span class="t-body-sm">{{e.text}}</span></li>
+                    </sc-for>
+                  </ol>
+                </sc-if>
+              </div>
+            </sc-if>
+            <sc-if value="{{s.p.hasContact}}">
+              <a href="tel:+441134960321" role="button" style="display:flex;align-items:center;justify-content:center;gap:10px;min-height:48px;padding:10px 16px;border:1px solid var(--border);border-radius:8px;color:var(--ink);text-decoration:none;font-weight:600;font-size:15px;text-align:center">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                Call Kestrel Freight
+              </a>
+            </sc-if>
+            <sc-if value="{{s.p.tzNote}}"><p class="t-body-sm" style="margin:0;color:var(--ink-muted)">{{s.p.tzNote}}</p></sc-if>
+          </div>
+        </div>
+
+        </sc-if><!-- DESKTOP 1440 --><sc-if value="{{s.showDesktop}}">
+        <div style="width:1440px;height:900px;flex:none;display:flex;background:var(--surface-100);border:1px solid var(--border);overflow:hidden">
+          <sc-if value="{{s.d.hasMap}}">
+            <div style="flex:1 1 auto;min-width:0;position:relative">
+              <x-import component="DispatchMap" from="./map.js" stops="{{s.d.map.stops}}" trucks="{{s.d.map.trucks}}" route="{{s.d.map.route}}" done-count="{{s.d.map.doneCount}}" note="{{s.d.map.note}}" dim="{{s.d.map.dim}}" controls="{{true}}" seed="{{3}}" hint-size="100%,100%"></x-import>
+            </div>
+          </sc-if>
+          <aside style="flex:{{s.d.asideFlex}};height:100%;overflow:auto;border-inline-start:1px solid var(--border);display:flex;flex-direction:column">
+            <div style="position:sticky;top:0;z-index:2;background:var(--surface-100);display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 32px;border-bottom:1px solid var(--divider)">
+              <div style="display:flex;flex-direction:column;min-width:0"><span class="t-h2">{{s.d.operator}}</span><span class="t-mono" style="color:var(--ink-muted)">{{s.d.ref}}</span></div>
+              <sc-if value="{{s.d.updated}}"><span class="t-body-sm" style="color:var(--ink-muted);font-weight:600;text-align:end">{{s.d.updated}}</span></sc-if>
+            </div>
+            <div style="padding:32px;display:flex;flex-direction:column;gap:32px;max-width:640px">
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <sc-if value="{{s.d.hasPill}}"><div style="display:flex"><dc-import name="StatusPill" status="{{s.d.pill}}" size="lg" hint-size="120px,34px"></dc-import></div></sc-if>
+                <h3 class="t-display-lg" style="margin:0">{{s.d.headline}}</h3>
+                <p class="t-body-lg" style="margin:0;color:var(--ink-muted);text-wrap:pretty">{{s.d.sub}}</p>
+              </div>
+              <sc-if value="{{s.d.notice}}">
+                <div role="status" style="display:flex;gap:14px;padding:20px;border-radius:8px;background:{{s.d.notice.bg}};border:1px solid {{s.d.notice.fg}}">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" style="flex:none;color:{{s.d.notice.fg}}"><circle cx="12" cy="12" r="10"></circle><path d="M12 7v5l3 2"></path></svg>
+                  <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+                    <span class="t-h2">{{s.d.notice.title}}</span>
+                    <span class="t-body-lg">{{s.d.notice.body}}</span>
+                    <sc-if value="{{s.d.notice.next}}"><span class="t-h2" style="margin-top:10px">What happens next</span><span class="t-body-lg">{{s.d.notice.next}}</span></sc-if>
+                  </div>
+                </div>
+              </sc-if>
+              <sc-if value="{{s.d.eta}}">
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <span class="t-label" style="color:var(--ink-muted)">{{s.d.eta.label}}</span>
+                  <span style="font-size:64px;line-height:68px;font-weight:700;letter-spacing:-1.5px">{{s.d.eta.value}}</span>
+                  <span class="t-body-lg" style="color:var(--ink-muted)">{{s.d.eta.detail}}</span>
+                </div>
+              </sc-if>
+              <sc-if value="{{s.d.hasFacts}}">
+                <dl style="margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px 32px;padding-block:20px;border-block:1px solid var(--divider)">
+                  <sc-for list="{{s.d.facts}}" as="f">
+                    <div style="display:flex;flex-direction:column;gap:4px;min-width:0"><dt class="t-label" style="color:var(--ink-muted)">{{f.k}}</dt><dd class="t-body" style="margin:0;font-weight:600;overflow-wrap:anywhere">{{f.v}}</dd></div>
+                  </sc-for>
+                </dl>
+              </sc-if>
+              <sc-if value="{{s.d.hasStops}}">
+                <div style="display:flex;flex-direction:column;gap:14px">
+                  <h4 class="t-h2" style="margin:0">Stops</h4>
+                  <ol style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column">
+                    <sc-for list="{{s.d.stops}}" as="st">
+                      <li style="display:grid;grid-template-columns:20px minmax(0,1fr) auto;column-gap:16px">
+                        <div style="display:flex;flex-direction:column;align-items:center">
+                          <span style="width:16px;height:16px;border-radius:999px;margin-top:2px;flex:none;background:{{st.dotBg}};border:{{st.dotBorder}}"></span>
+                          <span style="flex:1;width:2px;background:var(--border);margin-block:4px;opacity:{{st.lineOp}}"></span>
+                        </div>
+                        <div style="padding-bottom:20px;display:flex;flex-direction:column;gap:2px;min-width:0">
+                          <span class="t-label" style="color:{{st.labelColor}}">{{st.label}}</span>
+                          <span class="t-body-lg" style="font-weight:{{st.mainWeight}};overflow-wrap:anywhere">{{st.main}}</span>
+                        </div>
+                        <span class="t-body" style="font-weight:600;color:{{st.timeColor}};text-align:end;padding-top:14px">{{st.time}}</span>
+                      </li>
+                    </sc-for>
+                  </ol>
+                </div>
+              </sc-if>
+              <sc-if value="{{s.d.hasHistory}}">
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <h4 class="t-h2" style="margin:0">History</h4>
+                  <ol style="list-style:none;margin:0;padding:0">
+                    <sc-for list="{{s.d.history}}" as="e">
+                      <li style="display:grid;grid-template-columns:9em minmax(0,1fr);gap:16px;padding-block:10px;border-bottom:1px solid var(--divider)"><span class="t-mono" style="color:var(--ink-muted);padding-top:2px">{{e.t}}</span><span class="t-body">{{e.text}}</span></li>
+                    </sc-for>
+                  </ol>
+                </div>
+              </sc-if>
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:16px 24px">
+                <sc-if value="{{s.d.hasContact}}">
+                  <a href="tel:+441134960321" role="button" style="display:inline-flex;align-items:center;gap:10px;min-height:44px;padding:10px 16px;border:1px solid var(--border);border-radius:8px;color:var(--ink);text-decoration:none;font-weight:600;font-size:15px">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                    Call Kestrel Freight · +44 113 496 0321
+                  </a>
+                </sc-if>
+                <sc-if value="{{s.d.tzNote}}"><span class="t-body-sm" style="color:var(--ink-muted)">{{s.d.tzNote}}</span></sc-if>
+              </div>
+            </div>
+          </aside>
+        </div></sc-if>
+      </div>
+    </section>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;dir&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;ltr&quot;,&quot;rtl&quot;],&quot;default&quot;:&quot;ltr&quot;,&quot;tsType&quot;:&quot;'ltr'|'rtl'&quot;},&quot;dark&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;longStrings&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;label&quot;:&quot;Pseudo-localise (+40% strings)&quot;}}">
+const PICK = 'Kestrel Freight depot, Unit 4, Hollins Industrial Estate, Wakefield WF2 0XT';
+const MINE = 'Ferreira Building Supplies — goods-in bay 3 (rear entrance off Carr Lane), 1180 Marlow Road, Leeds LS12 6HP';
+const P = [[.2, .74], [.44, .47], [.74, .27]];
+const GOODS = ['Goods', '14 pallets · ceramic floor tiles'];
+const BOOKED = ['Booked', '29 Sep, 16:02'];
+const pins = (d1, d2, d3) => [{ n: 1, kind: 'pickup', x: P[0][0], y: P[0][1], done: d1 }, { n: 2, kind: 'dropoff', x: P[1][0], y: P[1][1], done: d2, small: true }, { n: 3, kind: 'dropoff', x: P[2][0], y: P[2][1], done: d3, label: 'Your drop-off' }];
+const stops = (st, t) => [
+  { n: 1, label: 'Stop 1 · Pickup', main: PICK, st: st[0], time: t[0] },
+  { n: 2, label: 'Stop 2 · Drop-off', main: "Another customer's drop-off", st: st[1], time: t[1], muted: true },
+  { n: 3, label: 'Stop 3 · Your drop-off', main: MINE, st: st[2], time: t[2], mine: true },
+];
+const H = (...a) => a.map(([t, text]) => ({ t, text }));
+const STATES = [
+  { key: 'in_transit', badge: 'A', label: 'In transit — populated default', why: 'Live truck, remaining route in blue, travelled route in grey.',
+    pill: 'in_transit', headline: 'On the way to you', sub: 'The truck has made one other drop-off and is heading to you next.', updated: 'Updated 1 min ago · refreshes on its own',
+    eta: { label: 'Estimated arrival', value: '14:25', detail: '9.4 km away' },
+    facts: [GOODS, ['Truck', 'KF-12'], ['Distance to your stop', '9.4 km'], BOOKED],
+    stops: stops(['done', 'done', 'next'], ['Collected 13:32', 'Delivered 13:58', 'Expected 14:25']),
+    history: H(['13:58', 'Delivered at stop 2'], ['13:32', 'Collected from the depot'], ['13:24', 'Arrived at the depot'], ['13:05', 'Truck KF-12 assigned'], ['29 Sep, 16:02', 'Delivery booked']),
+    map: { stops: pins(true, true, false), trucks: [{ id: 't', x: .6, y: .36, label: 'KF-12' }], route: [P[0], P[1], [.6, .36], P[2]], doneCount: 3 } },
+  { key: 'pending', badge: 'B', label: 'Pending', why: 'No truck, so no marker and no ETA. The map shows only where the goods start and end, and says why there is no truck.',
+    pill: 'pending', headline: 'Waiting for a truck', sub: 'Kestrel Freight has your booking. No truck has been assigned yet, so there is no position or arrival time to show. This page updates on its own when one is.', updated: 'Checked 1 min ago',
+    eta: { label: 'Requested window, today', value: '13:00 – 17:00', detail: 'An arrival time appears once a truck is assigned' },
+    facts: [GOODS, ['Truck', 'Not assigned yet'], BOOKED],
+    stops: stops(['todo', 'todo', 'todo'], ['Waiting for a truck', '', '']),
+    history: H(['29 Sep, 16:02', 'Delivery booked']),
+    map: { stops: pins(false, false, false), trucks: [], route: P, doneCount: 0, note: 'No truck assigned yet — nothing to track' } },
+  { key: 'assigned', badge: 'C', label: 'Assigned', why: 'Truck known and at the depot. ETA is a window until it sets off.',
+    pill: 'assigned', headline: 'Truck assigned', sub: "Truck KF-12 will collect your goods from the depot. It hasn't set off yet.", updated: 'Updated 1 min ago · refreshes on its own',
+    eta: { label: 'Estimated arrival window', value: '14:10 – 14:40', detail: 'Narrows to a single time once the truck sets off' },
+    facts: [GOODS, ['Truck', 'KF-12'], ['Distance to your stop', '31 km from the depot'], BOOKED],
+    stops: stops(['next', 'todo', 'todo'], ['Collection due 13:30', '', 'Window 14:10 – 14:40']),
+    history: H(['13:05', 'Truck KF-12 assigned'], ['29 Sep, 16:02', 'Delivery booked']),
+    map: { stops: pins(false, false, false), trucks: [{ id: 't', x: .24, y: .69, label: 'KF-12 · at depot' }], route: P, doneCount: 0 } },
+  { key: 'stale', badge: 'D', label: 'Stale position — degraded', why: 'Still in transit, but the last position is 24 minutes old. The marker goes hollow, grey and dashed, is labelled with its age, and the ETA is called an estimate from then.',
+    pill: 'in_transit', headline: 'On the way to you', sub: 'The truck has made one other drop-off and is heading to you next.', updated: 'Last position 24 min ago',
+    notice: { tone: 'stale', title: 'Truck position is 24 minutes old', body: "The driver's phone last reported at 13:58, near the previous drop-off. The delivery is still in progress. The map shows that last known position, not where the truck is now." },
+    eta: { label: 'Last estimate', value: '14:25', detail: 'Calculated at 13:58 — may be out of date' },
+    facts: [GOODS, ['Truck', 'KF-12'], ['Last known position', 'Near stop 2, at 13:58'], BOOKED],
+    stops: stops(['done', 'done', 'next'], ['Collected 13:32', 'Delivered 13:58', 'Expected 14:25']),
+    history: H(['13:58', 'Last position received'], ['13:58', 'Delivered at stop 2'], ['13:32', 'Collected from the depot'], ['13:05', 'Truck KF-12 assigned'], ['29 Sep, 16:02', 'Delivery booked']),
+    map: { stops: pins(true, true, false), trucks: [{ id: 't', x: .48, y: .43, state: 'stale', label: 'Last seen 13:58' }], route: [P[0], P[1], [.48, .43], P[2]], doneCount: 3, note: 'Position not updated since 13:58' } },
+  { key: 'completed', badge: 'E', label: 'Completed', why: 'Tracking has ended, so the truck marker goes. Proof of delivery replaces the ETA.',
+    pill: 'completed', headline: 'Delivered', sub: 'Delivered to goods-in bay 3. Live tracking has ended.',
+    eta: { label: 'Delivered at', value: '14:31', detail: 'Signed for by J. Okafor' },
+    facts: [GOODS, ['Truck', 'KF-12'], BOOKED],
+    stops: stops(['done', 'done', 'done'], ['Collected 13:32', 'Delivered 13:58', 'Delivered 14:31']),
+    history: H(['14:31', 'Delivered · signed for by J. Okafor'], ['14:24', 'Arrived at your drop-off'], ['13:58', 'Delivered at stop 2'], ['13:32', 'Collected from the depot'], ['13:05', 'Truck KF-12 assigned'], ['29 Sep, 16:02', 'Delivery booked']),
+    map: { stops: pins(true, true, true), trucks: [], route: P, doneCount: 3, note: 'Tracking ended' } },
+  { key: 'failed', badge: 'F', label: 'Failed', why: 'The reason in plain words, then what happens to the goods and who acts next.',
+    pill: 'failed', headline: 'Delivery not completed', sub: "The driver couldn't deliver your goods at 14:31.",
+    notice: { tone: 'failed', title: 'Nobody was available to receive the goods', body: 'The driver arrived at 14:24 and waited 15 minutes at goods-in bay 3.', next: 'The goods are going back to the Kestrel Freight depot today. Kestrel Freight will call you to arrange a new delivery, or you can call them now.' },
+    facts: [GOODS, ['Truck', 'KF-12'], BOOKED],
+    stops: stops(['done', 'done', 'failed'], ['Collected 13:32', 'Delivered 13:58', 'Not delivered 14:31']),
+    history: H(['14:31', 'Not delivered — customer unavailable'], ['14:24', 'Arrived at your drop-off'], ['13:58', 'Delivered at stop 2'], ['13:32', 'Collected from the depot'], ['13:05', 'Truck KF-12 assigned'], ['29 Sep, 16:02', 'Delivery booked']),
+    map: { stops: pins(true, true, false), trucks: [], route: P, doneCount: 2, note: 'Tracking ended — goods returning to depot' } },
+  { key: 'cancelled', badge: 'G', label: 'Cancelled', why: 'Map recedes. Says who cancelled and when, and that the link will not change again.',
+    pill: 'cancelled', headline: 'Delivery cancelled', sub: 'Kestrel Freight cancelled this delivery on 30 Sep at 11:05. Nothing is on its way on this link.',
+    notice: { tone: 'neutral', title: 'Still expecting these goods?', body: "Call Kestrel Freight. This page won't update again." },
+    facts: [GOODS, BOOKED],
+    stops: stops(['cancelled', 'cancelled', 'cancelled'], ['Cancelled', '', 'Cancelled']),
+    history: H(['30 Sep, 11:05', 'Cancelled by Kestrel Freight'], ['29 Sep, 16:02', 'Delivery booked']),
+    map: { stops: pins(false, false, false), trucks: [], route: P, doneCount: 0, dim: true, note: 'Cancelled — no truck on the way' } },
+  { key: 'not_found', badge: 'H', label: 'Empty — link not found', why: 'Invalid or expired token. No operator is known, so no brand, no contact and no map.',
+    operator: 'Delivery tracking', ref: '', noMap: true, headline: "This tracking link isn't working", sub: 'It may be mistyped or out of date. Open the link from your message again, or contact the company that sent it.' },
+];
+const shiftStr = s => s.replace(/\b(\d{2}):(\d{2})\b/g, (_, h, m) => String((+h + 1) % 24).padStart(2, '0') + ':' + m);
+const ACC = { a: 'á', e: 'é', i: 'í', o: 'ö', u: 'ü', c: 'ç', n: 'ñ', A: 'Å', E: 'É', O: 'Ø' };
+const pseudo = s => { if (!s || typeof s !== 'string') return s; const t = s.replace(/[aeioucnAEO]/g, ch => ACC[ch]); const pad = Math.ceil(s.length * .4); return '⟦' + t + ' ' + t.slice(0, pad).trim() + '⟧'; };
+function localise(o) {
+  const p = pseudo, x = JSON.parse(JSON.stringify(o));
+  ['headline', 'sub', 'updated', 'why'].forEach(k => x[k] = p(x[k]));
+  if (x.notice) ['title', 'body', 'next'].forEach(k => x.notice[k] = p(x.notice[k]));
+  if (x.eta) { x.eta.label = p(x.eta.label); x.eta.detail = p(x.eta.detail); }
+  if (x.stops) x.stops.forEach(st => { st.label = p(st.label); st.time = p(st.time); if (st.muted) st.main = p(st.main); });
+  if (x.history) x.history.forEach(h => h.text = p(h.text));
+  if (x.facts) x.facts = x.facts.map(([k, v]) => [p(k), v]);
+  if (x.map && x.map.note) x.map.note = p(x.map.note);
+  return x;
+}
+let PSEUDO = false;
+function view(s, phone) {
+  let o = phone ? JSON.parse(shiftStr(JSON.stringify(s))) : s;
+  if (PSEUDO) o = localise(o);
+  const found = o.key !== 'not_found';
+  const toneMap = { stale: ['var(--status-pending)', 'var(--status-pending-bg)'], failed: ['var(--status-failed)', 'var(--status-failed-bg)'], neutral: ['var(--border)', 'var(--surface-200)'] };
+  const notice = o.notice ? Object.assign({}, o.notice, { fg: toneMap[o.notice.tone][0], bg: toneMap[o.notice.tone][1] }) : null;
+  const ST = {
+    done: ['var(--ink)', '2px solid var(--ink)', 'var(--ink-muted)'],
+    next: ['var(--accent-bg)', '4px solid var(--status-transit)', 'var(--status-transit)'],
+    todo: ['var(--surface-100)', '2px solid var(--border)', 'var(--ink-muted)'],
+    failed: ['var(--status-failed)', '2px solid var(--status-failed)', 'var(--status-failed)'],
+    cancelled: ['var(--surface-100)', '2px dashed var(--border)', 'var(--ink-muted)'],
+  };
+  const stopsV = (o.stops || []).map((x, i, a) => ({ ...x, dotBg: ST[x.st][0], dotBorder: ST[x.st][1], timeColor: ST[x.st][2], lineOp: i === a.length - 1 ? 0 : 1, labelColor: x.mine ? 'var(--ink)' : 'var(--ink-muted)', mainWeight: x.mine ? 700 : x.muted ? 400 : 500 }));
+  return {
+    operator: o.operator || 'Kestrel Freight', ref: o.ref ?? 'Delivery DLV-40718', hasPill: !!o.pill, pill: o.pill,
+    hasMap: !o.noMap, map: o.map || {}, headline: o.headline, sub: o.sub, updated: o.updated || null, notice, eta: o.eta || null,
+    tzTag: phone && o.eta && /\d:\d/.test(o.eta.value) ? 'Your time · CEST' : null,
+    hasStops: stopsV.length > 0, stops: stopsV, hasHistory: !!(o.history && o.history.length), history: o.history || [],
+    histLabel: 'Delivery history · ' + ((o.history || []).length) + (o.history && o.history.length === 1 ? ' update' : ' updates'),
+    hasFacts: !!o.facts, facts: (o.facts || []).map(([k, v]) => ({ k, v })), hasContact: found,
+    tzNote: !found ? null : phone ? 'Times are in your time zone (CEST). Kestrel Freight works in UK time (BST), one hour behind.' : 'Times are in your time zone (BST).',
+    asideFlex: o.noMap ? '1 1 auto' : '0 0 600px',
+  };
+}
+class Component extends DCLogic {
+  state = { open: {} };
+  renderVals() {
+    const dir = this.props.dir ?? 'ltr';
+    PSEUDO = !!this.props.longStrings;
+    const only = this.props.only || null, frame = this.props.frame || 'both';
+    return {
+      showChrome: !only, pad: only ? '0' : '48px', rootGap: only ? '0' : '72px',
+      dir, rootClass: this.props.dark ? 'dark' : '',
+      states: STATES.filter(s => !only || s.key === only).map(s => {
+        const open = !!this.state.open[s.key];
+        return { chrome: !only, showPhone: frame !== 'desktop', showDesktop: frame !== 'phone', key: s.key, badge: s.badge, label: s.label, why: s.why, p: view(s, true), d: view(s, false), open, chev: open ? 'rotate(180deg)' : 'none',
+          toggle: () => this.setState(st => ({ open: { ...st.open, [s.key]: !st.open[s.key] } })) };
+      }),
+    };
+  }
+}
+</script>
+</body>
+</html>

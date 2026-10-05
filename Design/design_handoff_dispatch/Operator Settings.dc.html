@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="dispatch-tokens.css">
+<style>*{box-sizing:border-box} body{margin:0;font-family:var(--font-sans);color:var(--ink);background:var(--surface-200);-webkit-font-smoothing:antialiased} a{color:var(--status-assigned)} a:hover{color:var(--ink)}</style>
+</helmet>
+<div class="{{rootClass}}" style="min-height:100vh;display:flex;flex-direction:column;background:var(--surface-200);color:var(--ink)">
+  <header style="position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px 24px;flex-wrap:wrap;padding:12px 24px;background:var(--surface-100);border-bottom:1px solid var(--border)">
+    <div style="display:flex;flex-direction:column"><span class="t-label" style="color:var(--ink-muted)">Kestrel Freight · Dispatch</span><h1 class="t-h1" style="margin:0">Operator configuration</h1></div>
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+      <span role="status" class="t-body-sm" style="font-weight:600;color:{{statusColor}}">{{statusText}}</span>
+      <button type="button" onClick="{{discard}}" disabled="{{clean}}" style="min-height:44px;padding:0 16px;border:1px solid var(--border);border-radius:8px;background:var(--surface-100);color:var(--ink);font:600 14px var(--font-sans);cursor:pointer;opacity:{{btnOpacity}}">Discard</button>
+      <button type="button" onClick="{{save}}" disabled="{{clean}}" style="min-height:44px;padding:0 20px;border:0;border-radius:8px;background:var(--ink);color:var(--surface-100);font:600 14px var(--font-sans);cursor:pointer;opacity:{{btnOpacity}}">Save changes</button>
+    </div>
+  </header>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:24px;padding:24px;max-width:1360px;scroll-padding-top:96px">
+    <div style="display:flex;flex-direction:column;gap:24px;min-width:0">
+      <section aria-labelledby="s-org" style="display:flex;flex-direction:column;gap:16px;padding:20px;background:var(--surface-100);border:1px solid var(--border);border-radius:12px">
+        <h2 id="s-org" class="t-h2" style="margin:0">Organisation</h2>
+        <label style="display:flex;flex-direction:column;gap:6px"><span class="t-h3">Name shown to customers</span><input value="{{c.name}}" onChange="{{on.name}}" style="min-height:44px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font:400 15px var(--font-sans);color:var(--ink);background:var(--surface-100)"></label>
+        <label style="display:flex;flex-direction:column;gap:6px"><span class="t-h3">Customer support phone</span><input value="{{c.phone}}" onChange="{{on.phone}}" type="tel" style="min-height:44px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font:400 15px var(--font-sans);color:var(--ink);background:var(--surface-100)"><span class="t-body-sm" style="color:var(--ink-muted)">Shown on tracking pages and failed-delivery notices.</span></label>
+      </section>
+
+      <section aria-labelledby="s-region" style="display:flex;flex-direction:column;gap:16px;padding:20px;background:var(--surface-100);border:1px solid var(--border);border-radius:12px">
+        <h2 id="s-region" class="t-h2" style="margin:0">Region</h2>
+        <label style="display:flex;flex-direction:column;gap:6px"><span class="t-h3">Language and number format</span>
+          <select value="{{c.locale}}" onChange="{{on.locale}}" style="min-height:44px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font:400 15px var(--font-sans);color:var(--ink);background:var(--surface-100)">
+            <sc-for list="{{locales}}" as="o"><option value="{{o.v}}">{{o.l}}</option></sc-for>
+          </select>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:6px"><span class="t-h3">Operator time zone</span>
+          <select value="{{c.tz}}" onChange="{{on.tz}}" style="min-height:44px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font:400 15px var(--font-sans);color:var(--ink);background:var(--surface-100)">
+            <sc-for list="{{zones}}" as="o"><option value="{{o}}">{{o}}</option></sc-for>
+          </select>
+          <span class="t-body-sm" style="color:var(--ink-muted)">Console times use this zone. Customers always see their own zone, marked when it differs.</span>
+        </label>
+        <fieldset style="margin:0;padding:0;border:0;display:flex;flex-direction:column;gap:6px">
+          <legend class="t-h3" style="padding:0;margin-bottom:6px">Distance units</legend>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <sc-for list="{{unitOpts}}" as="u"><button type="button" role="radio" aria-checked="{{u.on}}" onClick="{{u.pick}}" style="min-height:44px;padding:0 16px;border-radius:999px;border:{{u.bd}};background:{{u.bg}};color:{{u.fg}};font:600 14px var(--font-sans);cursor:pointer">{{u.l}}</button></sc-for>
+          </div>
+        </fieldset>
+      </section>
+
+      <section aria-labelledby="s-map" style="display:flex;flex-direction:column;gap:16px;padding:20px;background:var(--surface-100);border:1px solid var(--border);border-radius:12px">
+        <h2 id="s-map" class="t-h2" style="margin:0">Map and service area</h2>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px">
+          <label style="display:flex;flex-direction:column;gap:6px"><span class="t-h3">Centre latitude</span><input value="{{c.lat}}" onChange="{{on.lat}}" inputmode="decimal" style="min-height:44px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font:400 14px var(--font-mono);color:var(--ink);background:var(--surface-100)"></label>
+          <label style="display:flex;flex-direction:column;gap:6px"><span class="t-h3">Centre longitude</span><input value="{{c.lng}}" onChange="{{on.lng}}" inputmode="decimal" style="min-height:44px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font:400 14px var(--font-mono);color:var(--ink);background:var(--surface-100)"></label>
+          <label style="display:flex;flex-direction:column;gap:6px"><span class="t-h3">Service radius ({{unitShort}})</span><input value="{{c.radius}}" onChange="{{on.radius}}" inputmode="numeric" style="min-height:44px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font:400 14px var(--font-mono);color:var(--ink);background:var(--surface-100)"></label>
+        </div>
+        <div style="height:220px;border:1px solid var(--border);border-radius:8px;overflow:hidden"><x-import component="DispatchMap" from="./map.js" stops="{{mapStops}}" note="{{mapNote}}" seed="{{9}}" hint-size="100%,220px"></x-import></div>
+      </section>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:24px;min-width:0">
+      <section aria-labelledby="s-rules" style="display:flex;flex-direction:column;gap:16px;padding:20px;background:var(--surface-100);border:1px solid var(--border);border-radius:12px">
+        <h2 id="s-rules" class="t-h2" style="margin:0">Tracking and exceptions</h2>
+        <sc-for list="{{rules}}" as="r">
+          <label style="display:grid;grid-template-columns:minmax(0,1fr) 120px;gap:4px 16px;align-items:center">
+            <span class="t-h3">{{r.label}}</span>
+            <span style="display:flex;align-items:center;gap:8px;grid-row:span 2"><input value="{{r.value}}" onChange="{{r.onChange}}" inputmode="numeric" aria-label="{{r.label}}" style="width:72px;min-height:44px;padding:0 10px;border:1px solid var(--border);border-radius:8px;font:400 14px var(--font-mono);color:var(--ink);background:var(--surface-100)"><span class="t-body-sm">{{r.unit}}</span></span>
+            <span class="t-body-sm" style="color:var(--ink-muted)">{{r.help}}</span>
+          </label>
+        </sc-for>
+        <label style="display:flex;align-items:flex-start;gap:12px;padding-top:12px;border-top:1px solid var(--divider);cursor:pointer">
+          <input type="checkbox" checked="{{c.agent}}" onChange="{{on.agent}}" style="width:22px;height:22px;margin:11px;accent-color:var(--agent)">
+          <span style="display:flex;flex-direction:column;gap:2px;padding-top:10px"><span class="t-h3">Agent proposals and answers</span><span class="t-body-sm" style="color:var(--ink-muted)">The agent can raise exceptions, answer questions and propose changes in the console. It never acts without a dispatcher's approval, and never contacts drivers or customers.</span></span>
+        </label>
+      </section>
+
+      <section aria-labelledby="s-prev" style="display:flex;flex-direction:column;gap:12px;padding:20px;background:var(--surface-100);border:2px solid var(--ink);border-radius:12px">
+        <h2 id="s-prev" class="t-h2" style="margin:0">Preview with these settings</h2>
+        <span class="t-body-sm" style="color:var(--ink-muted)">Rendered with Intl for the chosen locale, zone and units.</span>
+        <div dir="{{previewDir}}" style="display:flex;flex-direction:column;gap:4px;padding:16px;background:var(--surface-200);border-radius:8px">
+          <span class="t-label" style="color:var(--ink-muted)">{{c.name}} · tracking page</span>
+          <span class="t-display">{{pv.time}}</span>
+          <span class="t-body">{{pv.dist}}</span>
+          <span class="t-body-sm" style="color:var(--ink-muted)">{{pv.date}}</span>
+        </div>
+        <dl style="margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 16px" class="t-body-sm">
+          <dt style="color:var(--ink-muted)">Console clock</dt><dd style="margin:0" class="t-mono">{{pv.clock}}</dd>
+          <dt style="color:var(--ink-muted)">Stale after</dt><dd style="margin:0">{{pv.stale}}</dd>
+          <dt style="color:var(--ink-muted)">Text direction</dt><dd style="margin:0">{{pv.dirLabel}}</dd>
+        </dl>
+      </section>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;dark&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const DEFAULTS = { name: 'Kestrel Freight', phone: '+44 113 496 0321', locale: 'en-GB', tz: 'Europe/London', units: 'km', lat: '53.683', lng: '-1.505', radius: '60', stale: '20', pending: '120', failedWindow: '60', ping: '15', agent: true };
+const LOCALES = [['en-GB', 'English (UK)'], ['en-US', 'English (US)'], ['fr-FR', 'Français'], ['pt-BR', 'Português (Brasil)'], ['id-ID', 'Bahasa Indonesia'], ['yo-NG', 'Yorùbá'], ['ar-EG', 'العربية']];
+const ZONES = ['Europe/London', 'America/Chicago', 'America/New_York', 'Africa/Lagos', 'Asia/Jakarta', 'Asia/Dubai', 'America/Sao_Paulo'];
+const SAMPLE = new Date(Date.UTC(2026, 8, 30, 13, 25));
+class Component extends DCLogic {
+  state = { c: { ...DEFAULTS }, saved: { ...DEFAULTS }, savedAt: null };
+  renderVals() {
+    const c = this.state.c, set = p => this.setState(s => ({ c: { ...s.c, ...p } }));
+    const clean = JSON.stringify(c) === JSON.stringify(this.state.saved);
+    const val = k => e => set({ [k]: e.target.value });
+    let loc = c.locale; try { new Intl.DateTimeFormat(loc); } catch (e) { loc = 'en-GB'; }
+    const safe = (f, fb) => { try { return f(); } catch (e) { return fb; } };
+    const time = safe(() => new Intl.DateTimeFormat(loc, { timeZone: c.tz, hour: 'numeric', minute: '2-digit' }).format(SAMPLE), '—');
+    const date = safe(() => new Intl.DateTimeFormat(loc, { timeZone: c.tz, weekday: 'long', day: 'numeric', month: 'long', timeZoneName: 'short' }).format(SAMPLE), '');
+    const distV = c.units === 'km' ? 9.4 : 5.8;
+    const dist = safe(() => new Intl.NumberFormat(loc, { style: 'unit', unit: c.units === 'km' ? 'kilometer' : 'mile', unitDisplay: 'short', maximumFractionDigits: 1 }).format(distV), distV + ' ' + c.units);
+    const staleTxt = safe(() => new Intl.NumberFormat(loc, { style: 'unit', unit: 'minute', unitDisplay: 'long' }).format(+c.stale || 0), c.stale + ' min');
+    const rtl = /^ar|^he|^fa|^ur/.test(c.locale);
+    const unitShort = c.units === 'km' ? 'km' : 'mi';
+    return {
+      rootClass: this.props.dark ? 'dark' : '', c, clean, btnOpacity: clean ? .45 : 1,
+      statusText: clean ? (this.state.savedAt ? 'Saved ' + this.state.savedAt : 'No unsaved changes') : 'Unsaved changes', statusColor: clean ? 'var(--ink-muted)' : 'var(--status-transit)',
+      save: () => this.setState(s => ({ saved: { ...s.c }, savedAt: new Intl.DateTimeFormat(loc, { hour: '2-digit', minute: '2-digit' }).format(new Date()) })),
+      discard: () => this.setState(s => ({ c: { ...s.saved } })),
+      on: { name: val('name'), phone: val('phone'), locale: val('locale'), tz: val('tz'), lat: val('lat'), lng: val('lng'), radius: val('radius'), agent: e => set({ agent: e.target.checked }) },
+      locales: LOCALES.map(([v, l]) => ({ v, l })), zones: ZONES, unitShort,
+      unitOpts: [['km', 'Kilometres'], ['mi', 'Miles']].map(([k, l]) => { const on = c.units === k; return { l, on: String(on), bd: on ? '2px solid var(--ink)' : '1px solid var(--border)', bg: on ? 'var(--ink)' : 'var(--surface-100)', fg: on ? 'var(--surface-100)' : 'var(--ink)', pick: () => set({ units: k }) }; }),
+      rules: [
+        ['stale', 'Truck counts as silent after', 'min', 'Marker turns hollow and grey; customers see "position is N minutes old".'],
+        ['pending', 'Flag pending deliveries after', 'min', 'Only while at least one truck is available.'],
+        ['failedWindow', 'Keep failed deliveries in the exception table for', 'min', 'Then they stay in the list under Failed.'],
+        ['ping', 'Driver position interval', 's', 'Markers glide across one interval, so a shorter interval means less lag.'],
+      ].map(([k, label, unit, help]) => ({ label, unit, help, value: c[k], onChange: val(k) })),
+      mapStops: [{ n: 1, kind: 'pickup', x: .5, y: .5, done: true, label: 'Map centre' }],
+      mapNote: `Service area: ${c.radius} ${unitShort} around ${c.lat}, ${c.lng}`,
+      previewDir: rtl ? 'rtl' : 'ltr',
+      pv: { time, date, dist: dist + ' away', clock: safe(() => new Intl.DateTimeFormat(loc, { timeZone: c.tz, hour: '2-digit', minute: '2-digit', timeZoneName: 'short' }).format(SAMPLE), ''), stale: staleTxt, dirLabel: rtl ? 'Right to left' : 'Left to right' },
+    };
+  }
+}
+</script>
+</body>
+</html>

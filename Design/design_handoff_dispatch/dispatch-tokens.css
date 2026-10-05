@@ -1,0 +1,224 @@
+/* Dispatch design system — tokens
+ * Generated from the Dispatch design system.
+ * Do not hand-edit values here; change them in the system and regenerate.
+ */
+
+:root {
+  /* surfaces */
+  --surface-100: #fafaf9;
+  --surface-200: #f1f1ef;
+  --surface-300: #e6e6e3;
+
+  /* text */
+  --ink: #1a1d24;
+  --ink-muted: #555d6b;
+  --ink-subtle: #757d8a;   /* 18px+ or 14px bold+ ONLY — fails 4.5:1 at body size */
+
+  /* lines */
+  --border: #8a8a85;       /* functional boundaries — meets 3:1 */
+  --divider: #dededa;      /* decorative only — does NOT meet 3:1 */
+
+  /* accent */
+  --accent: #8a5a00;
+  --accent-bg: #faf1de;
+  --focus-ring: #1f5b99;
+
+  /* delivery status */
+  --status-pending: #555d6b;
+  --status-pending-bg: #f0f1f3;
+  --status-assigned: #1f5b99;
+  --status-assigned-bg: #e7f0f9;
+  --status-transit: #8a5a00;
+  --status-transit-bg: #faf1de;
+  --status-completed: #1e6b47;
+  --status-completed-bg: #e6f2ec;
+  --status-cancelled: #4a4a52;
+  --status-cancelled-bg: #eeeef0;
+  --status-failed: #a3281e;
+  --status-failed-bg: #fbeae8;
+
+  /* truck status — aliases of the delivery statuses they share meaning with */
+  --truck-available: var(--status-completed);
+  --truck-available-bg: var(--status-completed-bg);
+  --truck-busy: var(--status-transit);
+  --truck-busy-bg: var(--status-transit-bg);
+  --truck-maintenance: var(--status-assigned);
+  --truck-maintenance-bg: var(--status-assigned-bg);
+  --truck-offline: var(--status-pending);
+  --truck-offline-bg: var(--status-pending-bg);
+
+  /* map markers — these sit on OSM tiles, not on a system surface */
+  --marker-truck: #8a5a00;
+  --marker-pickup: #1a1d24;
+  --marker-dropoff: #1f5b99;
+  --marker-stale: #757d8a;
+
+  /* map tiles — the OSM stand-in palette. Tiles stay light in both themes,
+   * so map labels use --map-ink / --map-label-bg, which .dark does NOT override. */
+  --map-land: #f2efe9;
+  --map-block: #e8e2d6;
+  --map-road: #ffffff;
+  --map-road-casing: #d3ccbf;
+  --map-primary: #f7d49b;
+  --map-primary-casing: #c9a064;
+  --map-water: #a9d0dc;
+  --map-park: #cfe5b8;
+  --map-ink: #1a1d24;
+  --map-ink-muted: #4a4f59;
+  --map-label-bg: #ffffff;
+
+  /* design-board chrome — annotation around frames, never inside a product screen */
+  --board-canvas: #dcdcd8;
+  --ink-annotation: #3d424c;
+
+  /* attention and agent */
+  --attention: #a3281e;
+  --attention-bg: #fbeae8;
+  --agent: #5c3d99;
+  --agent-bg: #f1edf9;
+
+  /* spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  /* sizes — these are accessibility floors, not suggestions */
+  --target-min: 44px;
+  --target-driver: 56px;
+  --target-gap: 8px;
+  --target-gap-critical: 16px;
+  --focus-width: 2px;
+  --pane-min: 280px;
+
+  /* type */
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+}
+
+.dark {
+  --surface-100: #16181d;
+  --surface-200: #1e2128;
+  --surface-300: #262a33;
+
+  --ink: #f2f3f5;
+  --ink-muted: #a8aeb8;
+  --ink-subtle: #858c97;
+
+  --border: #6e747e;
+  --divider: #2e323b;
+
+  --accent: #e0a94a;
+  --accent-bg: #2e2413;
+  --focus-ring: #7bb0e8;
+
+  --status-pending: #a8aeb8;
+  --status-pending-bg: #242830;
+  --status-assigned: #7bb0e8;
+  --status-assigned-bg: #16293d;
+  --status-transit: #e0a94a;
+  --status-transit-bg: #2e2413;
+  --status-completed: #5fc494;
+  --status-completed-bg: #142d22;
+  --status-cancelled: #9296a0;
+  --status-cancelled-bg: #232631;
+  --status-failed: #e8837a;
+  --status-failed-bg: #33191a;
+
+  --marker-truck: #e0a94a;
+  --marker-pickup: #f2f3f5;
+  --marker-dropoff: #7bb0e8;
+  --marker-stale: #858c97;
+
+  --attention: #e8837a;
+  --attention-bg: #33191a;
+  --agent: #b49ae0;
+  --agent-bg: #231b33;
+}
+
+/* ---- Tailwind v4: expose tokens as utilities ----
+ * If you are on Tailwind v4, add this block. On v3, map the same names in
+ * tailwind.config.ts under theme.extend instead.
+ */
+@theme inline {
+  --color-surface-100: var(--surface-100);
+  --color-surface-200: var(--surface-200);
+  --color-surface-300: var(--surface-300);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+  --color-border: var(--border);
+  --color-divider: var(--divider);
+  --color-accent: var(--accent);
+  --color-accent-bg: var(--accent-bg);
+  --color-focus-ring: var(--focus-ring);
+
+  --color-status-pending: var(--status-pending);
+  --color-status-pending-bg: var(--status-pending-bg);
+  --color-status-assigned: var(--status-assigned);
+  --color-status-assigned-bg: var(--status-assigned-bg);
+  --color-status-transit: var(--status-transit);
+  --color-status-transit-bg: var(--status-transit-bg);
+  --color-status-completed: var(--status-completed);
+  --color-status-completed-bg: var(--status-completed-bg);
+  --color-status-cancelled: var(--status-cancelled);
+  --color-status-cancelled-bg: var(--status-cancelled-bg);
+  --color-status-failed: var(--status-failed);
+  --color-status-failed-bg: var(--status-failed-bg);
+
+  --color-attention: var(--attention);
+  --color-attention-bg: var(--attention-bg);
+  --color-agent: var(--agent);
+  --color-agent-bg: var(--agent-bg);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+}
+
+/* ---- type scale ---- */
+.t-display-lg     { font-size: 40px; line-height: 44px; font-weight: 700; letter-spacing: -0.8px; }
+.t-display        { font-size: 30px; line-height: 34px; font-weight: 700; letter-spacing: -0.5px; }
+.t-h1             { font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -0.2px; }
+.t-h2             { font-size: 17px; line-height: 24px; font-weight: 600; }
+.t-h3             { font-size: 14px; line-height: 20px; font-weight: 600; }
+.t-body-lg        { font-size: 17px; line-height: 26px; font-weight: 400; }
+.t-body           { font-size: 15px; line-height: 22px; font-weight: 400; }
+.t-body-sm        { font-size: 13px; line-height: 19px; font-weight: 400; }
+.t-label          { font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; }
+.t-label-sm       { font-size: 10px; line-height: 13px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; }
+.t-mono           { font-family: var(--font-mono); font-size: 13px; line-height: 18px; }
+.t-mono-sm        { font-family: var(--font-mono); font-size: 11px; line-height: 16px; }
+
+/* driver app only — read at arm's length in a moving vehicle */
+.t-driver-address { font-size: 26px; line-height: 32px; font-weight: 700; letter-spacing: -0.3px; }
+.t-driver-action  { font-size: 19px; line-height: 24px; font-weight: 700; letter-spacing: 0.3px; }
+.t-driver-meta    { font-size: 16px; line-height: 22px; font-weight: 500; }
+
+/* ---- global floors ---- */
+button, a[role="button"], [role="tab"], input[type="checkbox"], input[type="radio"] {
+  min-height: var(--target-min);
+  min-width: var(--target-min);
+}
+
+.driver button, .driver a[role="button"] {
+  min-height: var(--target-driver);
+  min-width: var(--target-driver);
+}
+
+:focus-visible {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: 2px;
+}

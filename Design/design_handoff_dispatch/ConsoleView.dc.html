@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="dispatch-tokens.css">
+<style>*{box-sizing:border-box} body{margin:0;font-family:var(--font-sans);color:var(--ink);background:var(--surface-200);-webkit-font-smoothing:antialiased} a{color:var(--status-assigned)} a:hover{color:var(--ink)}</style>
+</helmet>
+<div class="{{rootClass}}" dir="{{dir}}" style="height:{{rootH}};display:flex;flex-direction:column;background:var(--surface-200);color:var(--ink);overflow:{{rootOverflow}};font-family:var(--font-sans)">
+
+  <header style="display:grid;grid-template-columns:{{hdrCols}};gap:12px 24px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface-100);flex:none">
+    <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:4px 12px;flex-wrap:wrap"><span class="t-h2">Kestrel Freight · Dispatch</span><span style="display:flex;align-items:center;gap:4px 12px;flex-wrap:wrap"><a href="Fleet.dc.html" style="display:inline-flex;align-items:center;min-height:44px;font:600 14px var(--font-sans)">Fleet</a><a href="Operator Settings.dc.html" style="display:inline-flex;align-items:center;min-height:44px;font:600 14px var(--font-sans)">Settings</a><span class="t-mono" style="color:var(--ink-muted)">{{clock}} BST</span></span></div>
+      <div role="group" aria-label="Fleet counts" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+        <sc-for list="{{counts}}" as="c" hint-placeholder-count="3">
+          <button type="button" onClick="{{c.onClick}}" aria-pressed="{{c.on}}" style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 12px;border:{{c.bd}};background:{{c.bg}};border-radius:8px;color:var(--ink);cursor:pointer;text-align:start;font:inherit;min-width:0">
+            <span class="t-display" style="color:{{c.numColor}}">{{c.n}}</span><span class="t-label" style="color:var(--ink-muted)">{{c.label}}</span>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:4px 12px;flex-wrap:wrap"><span class="t-h3">Needs attention · {{excCount}}</span><span class="t-body-sm" style="color:var(--ink-muted)">Silent 20+ min · pending 2 h+ with trucks free · failed in the last hour · agent-raised</span></div>
+      <sc-if value="{{showExcTable}}">
+        <div role="table" aria-label="Exceptions" style="display:flex;flex-direction:column;gap:2px">
+          <div role="row" class="t-label" style="display:grid;grid-template-columns:150px 210px minmax(0,1fr) 52px 76px 88px;gap:10px;padding:2px 10px;color:var(--ink-muted)"><span role="columnheader">Issue</span><span role="columnheader">Subject</span><span role="columnheader">Detail</span><span role="columnheader">Since</span><span role="columnheader">Raised by</span><span role="columnheader"></span></div>
+          <sc-for list="{{exceptions}}" as="x" hint-placeholder-count="4">
+            <div role="row" style="display:grid;grid-template-columns:150px 210px minmax(0,1fr) 52px 76px 88px;gap:10px;align-items:center;padding:0 4px 0 10px;min-height:44px;background:var(--attention-bg);border-radius:4px">
+              <span role="cell" class="t-body-sm" style="font-weight:700;color:var(--attention)">{{x.issue}}</span>
+              <span role="cell" class="t-mono" style="font-weight:600">{{x.subject}}</span>
+              <span role="cell" class="t-body-sm">{{x.detail}}</span>
+              <span role="cell" class="t-mono">{{x.since}}</span>
+              <span role="cell"><sc-if value="{{x.agent}}"><span class="t-body-sm" style="display:inline-flex;align-items:center;gap:5px;padding:1px 8px;border-radius:999px;border:1px solid var(--agent);background:var(--agent-bg);color:var(--agent);font-weight:700"><span style="width:7px;height:7px;background:var(--agent);transform:rotate(45deg)"></span>Agent</span></sc-if><sc-if value="{{x.rule}}"><span class="t-body-sm" style="color:var(--ink-muted)">Rule</span></sc-if></span>
+              <span role="cell" style="display:flex;justify-content:flex-end"><button type="button" onClick="{{x.onView}}" style="min-height:40px;min-width:76px;padding:0 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface-100);color:var(--ink);font:600 13px var(--font-sans);cursor:pointer">{{x.action}}</button></span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+      <sc-if value="{{showExcStack}}">
+        <ul aria-label="Exceptions" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px">
+          <sc-for list="{{exceptions}}" as="x">
+            <li style="display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:8px 10px;background:var(--attention-bg);border-radius:4px">
+              <span class="t-body-sm" style="font-weight:700;color:var(--attention)">{{x.issue}}</span>
+              <span class="t-mono" style="font-weight:600">{{x.subject}}</span>
+              <sc-if value="{{x.agent}}"><span class="t-body-sm" style="padding:1px 8px;border-radius:999px;border:1px solid var(--agent);background:var(--agent-bg);color:var(--agent);font-weight:700">Agent</span></sc-if>
+              <span class="t-body-sm" style="flex:1 1 100%">{{x.detail}} · since {{x.since}}</span>
+              <button type="button" onClick="{{x.onView}}" style="min-height:44px;padding:0 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface-100);color:var(--ink);font:600 13px var(--font-sans);cursor:pointer">{{x.action}}</button>
+            </li>
+          </sc-for>
+        </ul>
+      </sc-if>
+      <sc-if value="{{noExc}}"><div class="t-body" style="display:flex;align-items:center;min-height:44px;padding:0 12px;border:1px dashed var(--border);border-radius:8px;color:var(--ink-muted)">Nothing needs attention.</div></sc-if>
+    </div>
+  </header>
+
+  <sc-if value="{{narrow}}">
+    <div role="tablist" aria-label="Panes" style="display:flex;flex-wrap:wrap;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--surface-100)">
+      <sc-for list="{{tabs}}" as="t"><button type="button" role="tab" aria-selected="{{t.on}}" onClick="{{t.onClick}}" style="min-height:44px;padding:0 14px;border-radius:8px;border:{{t.bd}};background:{{t.bg}};color:{{t.fg}};font:600 14px var(--font-sans);cursor:pointer">{{t.label}}</button></sc-for>
+    </div>
+  </sc-if>
+
+  <div style="flex:{{mainFlex}};min-height:0;display:flex;flex-direction:{{mainDir}}">
+
+    <section aria-label="Deliveries" style="display:{{pane.left}};flex:{{pane.leftFlex}};min-width:0;min-height:0;flex-direction:column;border-inline-end:1px solid var(--border);background:var(--surface-100)">
+      <form onSubmit="{{onAsk}}" role="search" style="display:flex;gap:8px;padding:12px;border-bottom:1px solid var(--divider)">
+        <label style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;min-height:44px;padding:0 4px 0 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface-100)">
+          <span class="t-label" style="color:var(--agent)">Ask</span>
+          <input value="{{ask}}" onChange="{{onAskChange}}" placeholder="Which deliveries are running late?" aria-label="Ask about deliveries and trucks" style="flex:1;min-width:0;border:0;background:transparent;font:400 14px var(--font-sans);color:var(--ink);min-height:40px">
+        </label>
+        <button type="submit" style="min-height:44px;padding:0 14px;border:1px solid var(--agent);background:var(--agent-bg);color:var(--agent);border-radius:8px;font:600 14px var(--font-sans);cursor:pointer">Ask</button>
+      </form>
+      <sc-if value="{{asking}}"><div role="status" class="t-body-sm" style="padding:8px 12px;color:var(--agent);font-weight:600">Checking positions and ETAs…</div></sc-if>
+      <sc-if value="{{hasAnswer}}">
+        <div role="region" aria-label="Answer" style="margin:8px 12px 4px;padding:12px;border:1px solid var(--agent);background:var(--agent-bg);border-radius:8px;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">
+            <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span class="t-label" style="color:var(--agent)">Answer</span><span class="t-h3">{{answer.title}}</span></div>
+            <button type="button" onClick="{{dismissAnswer}}" aria-label="Dismiss answer" style="width:44px;height:44px;flex:none;border:0;background:transparent;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;margin:-10px -8px 0 0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+          </div>
+          <sc-for list="{{answer.rows}}" as="r">
+            <button type="button" onClick="{{r.onClick}}" style="text-align:start;display:flex;flex-direction:column;gap:2px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-100);color:var(--ink);font:inherit;cursor:pointer">
+              <span class="t-body-sm" style="font-weight:700">{{r.text}}</span><span class="t-body-sm" style="color:var(--ink-muted)">{{r.sub}}</span>
+            </button>
+          </sc-for>
+          <span class="t-body-sm" style="color:var(--ink-muted)">{{answer.foot}}</span>
+        </div>
+      </sc-if>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px 0">
+        <span class="t-h3">Deliveries · {{delTotal}}</span>
+        <sc-if value="{{cf.closed}}"><button type="button" onClick="{{cf.open}}" style="min-height:44px;padding:0 14px;border:0;border-radius:8px;background:var(--ink);color:var(--surface-100);font:600 13px var(--font-sans);cursor:pointer">New delivery</button></sc-if>
+      </div>
+      <sc-if value="{{cf.isOpen}}">
+        <form onSubmit="{{cf.submit}}" novalidate="{{true}}" aria-label="New delivery" style="margin:10px 12px 4px;padding:14px;border:2px solid var(--ink);border-radius:8px;background:var(--surface-100);display:flex;flex-direction:column;gap:12px;max-height:520px;overflow:auto">
+          <span class="t-h2">New delivery</span>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+            <label style="display:flex;flex-direction:column;gap:4px"><span class="t-body-sm" style="font-weight:600">Customer</span><input value="{{cf.customer}}" onChange="{{cf.onCustomer}}" style="min-height:44px;padding:0 10px;border:{{cf.customerBd}};border-radius:8px;font:400 14px var(--font-sans);color:var(--ink);background:var(--surface-100)"><sc-if value="{{cf.customerErr}}"><span class="t-body-sm" style="color:var(--attention);font-weight:600">{{cf.customerErr}}</span></sc-if></label>
+            <label style="display:flex;flex-direction:column;gap:4px"><span class="t-body-sm" style="font-weight:600">Customer phone <span style="font-weight:400;color:var(--ink-muted)">(optional)</span></span><input value="{{cf.phone}}" onChange="{{cf.onPhone}}" type="tel" style="min-height:44px;padding:0 10px;border:1px solid var(--border);border-radius:8px;font:400 14px var(--font-sans);color:var(--ink);background:var(--surface-100)"></label>
+          </div>
+          <label style="display:flex;flex-direction:column;gap:4px"><span class="t-body-sm" style="font-weight:600">Stop 1 · Pickup</span><textarea value="{{cf.pickup}}" onChange="{{cf.onPickup}}" rows="2" style="padding:8px 10px;border:{{cf.pickupBd}};border-radius:8px;font:400 14px/20px var(--font-sans);color:var(--ink);background:var(--surface-100);resize:vertical"></textarea><sc-if value="{{cf.pickupErr}}"><span class="t-body-sm" style="color:var(--attention);font-weight:600">{{cf.pickupErr}}</span></sc-if></label>
+          <sc-for list="{{cf.drops}}" as="d">
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span class="t-body-sm" style="font-weight:600">{{d.label}}</span><sc-if value="{{d.canRemove}}"><button type="button" onClick="{{d.onRemove}}" aria-label="{{d.removeAria}}" style="min-height:44px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-100);color:var(--ink);font:600 12px var(--font-sans);cursor:pointer">Remove</button></sc-if></div>
+              <textarea value="{{d.value}}" onChange="{{d.onChange}}" aria-label="{{d.label}}" rows="2" style="padding:8px 10px;border:{{d.bd}};border-radius:8px;font:400 14px/20px var(--font-sans);color:var(--ink);background:var(--surface-100);resize:vertical"></textarea>
+              <sc-if value="{{d.err}}"><span class="t-body-sm" style="color:var(--attention);font-weight:600">{{d.err}}</span></sc-if>
+            </div>
+          </sc-for>
+          <button type="button" onClick="{{cf.addDrop}}" style="align-self:flex-start;min-height:44px;padding:0 12px;border:1px dashed var(--border);border-radius:8px;background:transparent;color:var(--ink);font:600 13px var(--font-sans);cursor:pointer">+ Add drop-off</button>
+          <label style="display:flex;flex-direction:column;gap:4px"><span class="t-body-sm" style="font-weight:600">Goods <span style="font-weight:400;color:var(--ink-muted)">(optional)</span></span><input value="{{cf.goods}}" onChange="{{cf.onGoods}}" style="min-height:44px;padding:0 10px;border:1px solid var(--border);border-radius:8px;font:400 14px var(--font-sans);color:var(--ink);background:var(--surface-100)"></label>
+          <div style="display:flex;gap:16px;flex-wrap:wrap">
+            <button type="submit" style="flex:1 1 120px;min-height:44px;border:0;border-radius:8px;background:var(--ink);color:var(--surface-100);font:600 14px var(--font-sans);cursor:pointer">Create as pending</button>
+            <button type="button" onClick="{{cf.cancel}}" style="flex:0 1 100px;min-height:44px;border:1px solid var(--border);border-radius:8px;background:var(--surface-100);color:var(--ink);font:600 14px var(--font-sans);cursor:pointer">Cancel</button>
+          </div>
+        </form>
+      </sc-if>
+      <div role="group" aria-label="Filter deliveries" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;border-bottom:1px solid var(--divider)">
+        <sc-if value="{{truckChip}}"><button type="button" onClick="{{clearTruck}}" aria-label="Remove truck filter" style="min-height:44px;padding:0 12px;border-radius:999px;border:2px solid var(--accent);background:var(--accent-bg);color:var(--ink);font:600 13px var(--font-sans);cursor:pointer;display:inline-flex;align-items:center;gap:6px">{{truckChip}} <span aria-hidden="true">×</span></button></sc-if>
+        <sc-if value="{{headerChip}}"><button type="button" onClick="{{clearHeader}}" aria-label="Remove filter" style="min-height:44px;padding:0 12px;border-radius:999px;border:2px solid var(--ink);background:var(--ink);color:var(--surface-100);font:600 13px var(--font-sans);cursor:pointer;display:inline-flex;align-items:center;gap:6px">{{headerChip}} <span aria-hidden="true">×</span></button></sc-if>
+        <sc-for list="{{dChips}}" as="c" hint-placeholder-count="7">
+          <button type="button" aria-pressed="{{c.on}}" onClick="{{c.onClick}}" style="min-height:44px;padding:0 12px;border-radius:999px;border:{{c.bd}};background:{{c.bg}};color:{{c.fg}};font:600 13px var(--font-sans);cursor:pointer;display:inline-flex;align-items:center;gap:6px">{{c.label}}<span class="t-mono-sm">{{c.n}}</span></button>
+        </sc-for>
+      </div>
+      <ul aria-label="Delivery list" style="list-style:none;margin:0;padding:0;flex:1;min-height:0;overflow:auto">
+        <sc-for list="{{rows}}" as="d" hint-placeholder-count="8">
+          <li style="border-bottom:1px solid var(--divider);background:{{d.bg}};box-shadow:{{d.ring}}">
+            <div style="display:flex;align-items:center;gap:8px;padding-inline-end:10px">
+              <button type="button" onClick="{{d.onSelect}}" aria-pressed="{{d.selStr}}" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:0;background:transparent;text-align:start;color:var(--ink);font:inherit;cursor:pointer">
+                <span style="display:flex;align-items:center;gap:6px 8px;flex-wrap:wrap"><span class="t-mono" style="font-weight:600">{{d.id}}</span><span class="t-h3" style="flex:1;min-width:8em">{{d.customer}}</span><dc-import name="StatusPill" status="{{d.status}}" size="sm" hint-size="84px,22px"></dc-import></span>
+                <span class="t-body-sm" style="color:var(--ink-muted)">{{d.line2}}</span>
+                <sc-if value="{{d.flag}}"><span class="t-body-sm" style="display:flex;align-items:center;gap:6px;font-weight:700;color:var(--attention)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path></svg>{{d.flag}}</span></sc-if>
+              </button>
+              <button type="button" onClick="{{d.onToggle}}" aria-expanded="{{d.expStr}}" aria-label="{{d.expLabel}}" style="width:44px;height:44px;flex:none;border:1px solid var(--border);border-radius:8px;background:var(--surface-100);color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transform:{{d.chev}}"><path d="m6 9 6 6 6-6"></path></svg></button>
+            </div>
+            <sc-if value="{{d.expanded}}">
+              <div style="padding:2px 12px 16px;display:flex;flex-direction:column;gap:16px">
+                <sc-if value="{{d.isPending}}">
+                  <div style="display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--surface-100)">
+                    <span class="t-h3">Assign a truck</span>
+                    <span class="t-body-sm" style="color:var(--ink-muted)">{{d.availLine}}</span>
+                    <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px">
+                      <sc-for list="{{d.cands}}" as="c">
+                        <li onMouseEnter="{{c.onHover}}" onMouseLeave="{{c.onLeave}}" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 6px 6px 10px;border-radius:8px;border:{{c.bd}};background:{{c.bg}}">
+                          <div style="display:flex;flex-direction:column;min-width:0"><span class="t-body-sm"><span class="t-mono" style="font-weight:700">{{c.id}}</span> · {{c.driver}}</span><span class="t-body-sm" style="color:var(--ink-muted)">{{c.dist}}</span></div>
+                          <button type="button" onClick="{{c.onAssign}}" onFocus="{{c.onHover}}" aria-label="{{c.aria}}" style="min-height:44px;padding:0 14px;border:0;border-radius:8px;background:var(--ink);color:var(--surface-100);font:600 13px var(--font-sans);cursor:pointer">Assign</button>
+                        </li>
+                      </sc-for>
+                    </ul>
+                  </div>
+                </sc-if>
+                <sc-if value="{{d.err}}"><div role="alert" style="display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:1px solid var(--status-failed);background:var(--status-failed-bg);border-radius:8px"><span class="t-body-sm" style="font-weight:700">Couldn't assign — the list was out of date</span><span class="t-mono">{{d.err}}</span><span class="t-body-sm">The truck list above has been refreshed. Pick another truck.</span></div></sc-if>
+                <sc-if value="{{d.note}}"><div role="status" class="t-body-sm" style="padding:10px 12px;border:1px solid var(--status-completed);background:var(--status-completed-bg);border-radius:8px;font-weight:600">{{d.note}}</div></sc-if>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <span class="t-label" style="color:var(--ink-muted)">Stops</span>
+                  <ol style="list-style:none;margin:0;padding:0">
+                    <sc-for list="{{d.stops}}" as="s">
+                      <li style="display:grid;grid-template-columns:24px minmax(0,1fr);column-gap:10px">
+                        <div style="display:flex;flex-direction:column;align-items:center"><span style="width:22px;height:22px;border-radius:999px;background:{{s.dotBg}};border:{{s.dotBd}};color:{{s.numColor}};font:700 11px/1 var(--font-sans);display:flex;align-items:center;justify-content:center;flex:none">{{s.n}}</span><span style="flex:1;width:2px;background:var(--border);margin-block:2px;opacity:{{s.lineOp}}"></span></div>
+                        <div style="padding-bottom:12px;display:flex;flex-direction:column;gap:1px;min-width:0"><span class="t-label" style="color:var(--ink-muted)">{{s.kind}}</span><span class="t-body-sm" style="overflow-wrap:anywhere">{{s.addr}}</span><span class="t-body-sm" style="font-weight:600;color:{{s.timeColor}}">{{s.time}}</span></div>
+                      </li>
+                    </sc-for>
+                  </ol>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <span class="t-label" style="color:var(--ink-muted)">Events</span>
+                  <ol style="list-style:none;margin:0;padding:0">
+                    <sc-for list="{{d.events}}" as="e"><li style="display:grid;grid-template-columns:48px minmax(0,1fr);gap:10px;padding-block:5px;border-bottom:1px solid var(--divider)"><span class="t-mono" style="color:var(--ink-muted)">{{e.t}}</span><span class="t-body-sm">{{e.text}}</span></li></sc-for>
+                  </ol>
+                </div>
+              </div>
+            </sc-if>
+          </li>
+        </sc-for>
+        <sc-if value="{{noDeliveries}}">
+          <li style="padding:32px 20px;display:flex;flex-direction:column;gap:12px;align-items:flex-start">
+            <span class="t-h2">No deliveries yet today</span>
+            <span class="t-body" style="color:var(--ink-muted)">Deliveries you create appear here, oldest pending first. {{availCount}} trucks are available at the depot.</span>
+            <button type="button" onClick="{{cf.open}}" style="min-height:44px;padding:0 16px;border:0;border-radius:8px;background:var(--ink);color:var(--surface-100);font:600 14px var(--font-sans);cursor:pointer">New delivery</button>
+          </li>
+        </sc-if>
+        <sc-if value="{{noMatch}}">
+          <li style="padding:24px 16px;display:flex;flex-direction:column;gap:10px;align-items:flex-start"><span class="t-body" style="color:var(--ink-muted)">No deliveries match these filters.</span><button type="button" onClick="{{clearAll}}" style="min-height:44px;padding:0 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface-100);color:var(--ink);font:600 13px var(--font-sans);cursor:pointer">Clear filters</button></li>
+        </sc-if>
+      </ul>
+    </section>
+
+    <section aria-label="Map" style="display:{{pane.map}};flex:1 1 auto;min-width:280px;height:{{mapH}};position:relative">
+      <x-import component="DispatchMap" from="./map.js" stops="{{map.stops}}" trucks="{{map.trucks}}" route="{{map.route}}" done-count="{{map.doneCount}}" links="{{map.links}}" note="{{map.note}}" on-truck="{{onTruck}}" controls="{{true}}" legend="{{true}}" duration="{{10}}" seed="{{9}}" hint-size="100%,100%"></x-import>
+    </section>
+
+    <section aria-label="Trucks" style="display:{{pane.right}};flex:{{pane.rightFlex}};min-width:0;min-height:0;flex-direction:column;border-inline-start:1px solid var(--border);background:var(--surface-100)">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:12px 12px 0"><span class="t-h3">Trucks · {{truckTotal}}</span><span class="t-body-sm" style="color:var(--ink-muted)">Select to filter deliveries</span></div>
+      <div role="group" aria-label="Filter trucks" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;border-bottom:1px solid var(--divider)">
+        <sc-for list="{{tChips}}" as="c" hint-placeholder-count="5">
+          <button type="button" aria-pressed="{{c.on}}" onClick="{{c.onClick}}" style="min-height:44px;padding:0 12px;border-radius:999px;border:{{c.bd}};background:{{c.bg}};color:{{c.fg}};font:600 13px var(--font-sans);cursor:pointer;display:inline-flex;align-items:center;gap:6px">{{c.label}}<span class="t-mono-sm">{{c.n}}</span></button>
+        </sc-for>
+      </div>
+      <ul aria-label="Truck list" style="list-style:none;margin:0;padding:0;flex:1;min-height:0;overflow:auto">
+        <sc-for list="{{truckRows}}" as="t" hint-placeholder-count="10">
+          <li style="border-bottom:1px solid var(--divider)">
+            <button type="button" onClick="{{t.onSelect}}" aria-pressed="{{t.selStr}}" style="width:100%;display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:0;background:{{t.bg}};box-shadow:{{t.ring}};text-align:start;color:var(--ink);font:inherit;cursor:pointer">
+              <span style="display:flex;align-items:center;gap:6px 8px;flex-wrap:wrap"><span class="t-mono" style="font-weight:700">{{t.id}}</span><span class="t-body-sm" style="flex:1;min-width:6em">{{t.driver}}</span><dc-import name="StatusPill" status="{{t.status}}" size="sm" hint-size="84px,22px"></dc-import></span>
+              <span class="t-body-sm" style="display:flex;align-items:center;gap:6px;color:var(--ink-muted);font-weight:{{t.subWeight}}"><span style="width:10px;height:10px;border-radius:999px;flex:none;border:2px {{t.dotStyle}} {{t.dotColor}};background:{{t.dotFill}}"></span>{{t.sub}}</span>
+            </button>
+          </li>
+        </sc-for>
+      </ul>
+    </section>
+
+    <aside aria-label="Agent proposals" style="display:{{pane.prop}};flex:{{pane.propFlex}};min-width:0;min-height:0;flex-direction:column;border-inline-start:1px solid var(--border);background:var(--surface-100)">
+      <sc-if value="{{propCollapsed}}">
+        <button type="button" onClick="{{toggleProp}}" aria-expanded="false" aria-label="{{propAria}}" style="flex:1;width:100%;display:flex;flex-direction:column;align-items:center;gap:14px;padding:14px 0;border:0;background:transparent;color:var(--ink);cursor:pointer">
+          <span style="min-width:28px;height:28px;padding:0 6px;border-radius:999px;background:{{propBadgeBg}};color:{{propBadgeFg}};border:1px solid var(--agent);font:600 13px/26px var(--font-mono);text-align:center">{{propCount}}</span>
+          <span class="t-label" style="writing-mode:vertical-rl;color:var(--agent)">Agent proposals</span>
+        </button>
+      </sc-if>
+      <sc-if value="{{propExpanded}}">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 8px 8px 16px;border-bottom:1px solid var(--divider)">
+          <span class="t-h3" style="color:var(--agent)">Agent proposals · {{propCount}}</span>
+          <button type="button" onClick="{{toggleProp}}" aria-expanded="true" aria-label="Collapse proposals" style="width:44px;height:44px;border:1px solid var(--border);border-radius:8px;background:var(--surface-100);color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg></button>
+        </div>
+        <div style="flex:1;min-height:0;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:16px">
+          <sc-if value="{{propNote}}"><div role="status" class="t-body-sm" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface-200);font-weight:600">{{propNote}}</div></sc-if>
+          <sc-if value="{{noProps}}">
+            <div style="display:flex;flex-direction:column;gap:10px;padding-top:8px">
+              <span class="t-h2">Nothing to review</span>
+              <span class="t-body" style="color:var(--ink-muted)">When the agent spots something it would change, such as a reassignment or a delivery to flag as late, it appears here with its reasoning. Nothing changes until you approve it.</span>
+              <span class="t-body-sm" style="color:var(--ink-muted)">{{propLastCheck}}</span>
+            </div>
+          </sc-if>
+          <sc-for list="{{proposals}}" as="p">
+            <article style="display:flex;flex-direction:column;gap:12px;padding:14px;border:1px solid var(--agent);border-radius:8px;background:var(--surface-100)">
+              <span class="t-label" style="color:var(--agent)">Proposal · {{p.at}}</span>
+              <span class="t-h2">{{p.title}}</span>
+              <div style="display:flex;flex-direction:column;gap:4px"><span class="t-label" style="color:var(--ink-muted)">Why</span><span class="t-body-sm">{{p.why}}</span></div>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <span class="t-label" style="color:var(--ink-muted)">What changes</span>
+                <sc-for list="{{p.changes}}" as="c">
+                  <div style="display:flex;flex-direction:column;gap:2px;padding:8px 10px;background:var(--surface-200);border-radius:4px">
+                    <span class="t-body-sm" style="font-weight:600">{{c.k}}</span>
+                    <span class="t-body-sm" style="display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline"><span style="color:var(--ink-muted);text-decoration:line-through">{{c.from}}</span><span aria-hidden="true">→</span><span style="font-weight:700">{{c.to}}</span></span>
+                  </div>
+                </sc-for>
+              </div>
+              <button type="button" onClick="{{p.onShow}}" style="align-self:flex-start;min-height:44px;padding:0 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface-100);color:var(--ink);font:600 13px var(--font-sans);cursor:pointer">Show on map</button>
+              <div style="display:flex;gap:16px;flex-wrap:wrap">
+                <button type="button" onClick="{{p.onApprove}}" style="flex:1 1 120px;min-height:44px;border:0;border-radius:8px;background:var(--ink);color:var(--surface-100);font:600 14px var(--font-sans);cursor:pointer">Approve</button>
+                <button type="button" onClick="{{p.onReject}}" style="flex:1 1 120px;min-height:44px;border:1px solid var(--border);border-radius:8px;background:var(--surface-100);color:var(--ink);font:600 14px var(--font-sans);cursor:pointer">Reject</button>
+              </div>
+            </article>
+          </sc-for>
+        </div>
+      </sc-if>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;scenario&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;live&quot;,&quot;assign&quot;,&quot;proposal&quot;,&quot;empty&quot;,&quot;narrow&quot;],&quot;default&quot;:&quot;live&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;height&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;100vh&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;narrow&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;dark&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;dir&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;ltr&quot;,&quot;rtl&quot;],&quot;default&quot;:&quot;ltr&quot;,&quot;tsType&quot;:&quot;'ltr'|'rtl'&quot;}}">
+const NOW = 14 * 60 + 2;
+const fmt = m => { m = ((Math.round(m) % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+const ago = m => m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + (m % 60) + ' min';
+function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+const DRIVERS = ['Amaka Obi', 'Dele Harrow', 'Priya Nair', 'Tomasz Wójcik', 'Siobhan Kelly', 'Yusuf Demir', 'Grace Mensah', 'Liam Walsh', 'Chen Wei', 'Marta Silva', 'Kwame Asante', 'Hannah Brooks', 'Imran Qureshi', 'Zofia Nowak', 'Oluwaseun Adeyemi', 'Farah Haddad', 'Ben Carter', 'Aisha Bello', 'Ines Moreau', 'Megan Price', 'Dmitri Volkov', 'Leila Ahmadi', 'Sam Whitaker', 'Ruth Ellis', 'Callum Reid', 'Rui Costa', 'Jonas Berg', 'Nadia Rahman', 'Arjun Mehta', 'Chloe Dunn', 'Mateus Rocha', 'Eva Horvath'];
+const CUSTOMERS = ['Ferreira Building Supplies', 'Harrow & Sons Timber', 'Northgate Community Hall', 'Bramley Tile Centre', 'Oakwood Garden Supplies', 'Calder Plumbing Merchants', 'Kirkstall Brewery Co.', 'Moortown Pharmacy', 'Headingley Cycle Works', 'Pudsey Print Studio', 'Rothwell Electrical Wholesale', 'Seacroft Food Bank', 'Chapel Allerton Deli', 'Garforth Joinery', 'Horsforth Flooring', 'Aire Valley Kitchens', 'Morley Paint & Decor', 'Wetherby Farm Shop', 'Otley Hardware', 'Shipley Glass & Glazing', 'Batley Carpet Warehouse', 'Yeadon Aero Parts', 'Moortown Pharmacy', 'Leeds Dental Lab', 'Hunslet Motor Factors', 'Armley Bakery', 'Beeston Printworks', 'Roundhay Florist', 'Meanwood Valley Farm', 'Crossgates Hardware', 'Castleford Wholesale Foods', 'Pontefract Office Supplies', 'Ossett Architectural Salvage'];
+const ADDRS = ['1180 Marlow Road, Leeds LS12 6HP', 'Yard B, Canal Wharf, Stourton, Leeds LS10 1SL', 'Unit 12, Thornes Park Business Centre, Denby Dale Road, Wakefield WF2 8DY', '14 Brook St, Ilkley LS29 8DE', 'Goods-in at rear — use the Station Approach entrance, not the shop front, 2 Market Place, Otley LS21 3AQ', 'Arch 7, Viaduct Road, Leeds LS4 2BP', '47 Town St, Horsforth LS18 4RJ', 'Kirkstall Forge, Abbey Road, Leeds LS5 3NF', 'Loading dock 2, Thorpe Park, Century Way, Leeds LS15 8ZB', '9 Commercial St, Batley WF17 5HJ', 'Mill 3, Saltaire Road, Shipley BD18 3LA', 'Leeds Bradford Airport, cargo gate 4 — driver ID required at security, Whitehouse Lane, Yeadon LS19 7TU', '22 Bridge Rd, Rothwell LS26 0EN', 'Crossgates Shopping Centre service yard, Station Road, Leeds LS15 8ET'];
+const DEPOT = { addr: 'Kestrel Freight depot, Hollins Industrial Estate, Wakefield WF2 0XT', x: .3, y: .8 };
+const SUPPLIER = { addr: 'Calder Tiles, Unit 3, Mill Lane, Elland HX5 9DJ', x: .12, y: .5 };
+const plate = i => 'KF-' + String(i + 1).padStart(2, '0');
+const km = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) * 28;
+const lerp = t => ({ x: t.from.x + (t.to.x - t.from.x) * t.f, y: t.from.y + (t.to.y - t.from.y) * t.f });
+const TL = { available: 'Available', on_delivery: 'On delivery', maintenance: 'Maintenance', offline: 'Offline' };
+
+function build() {
+  const r = rng(11), trucks = [], dels = [];
+  for (let i = 0; i < 32; i++) trucks.push({ id: plate(i), driver: DRIVERS[i], status: i < 22 ? 'on_delivery' : i < 29 ? 'available' : i < 31 ? 'maintenance' : 'offline', x: null, y: null, off: (i * 2) % 10, delivery: null });
+  const LATE = { 15: 35, 6: 22, 11: 14 }, ASSIGNED = [3, 9, 14, 18];
+  for (let i = 0; i < 22; i++) {
+    const id = 'DLV-' + (40710 + i), n = 2 + Math.floor(r() * 3), pick = i % 5 === 2 ? SUPPLIER : DEPOT;
+    const stops = [{ n: 1, kind: 'pickup', addr: pick.addr, x: pick.x + (r() - .5) * .03, y: pick.y + (r() - .5) * .03 }];
+    for (let k = 1; k < n; k++) stops.push({ n: k + 1, kind: 'dropoff', addr: ADDRS[(i * 3 + k) % ADDRS.length], x: .08 + r() * .84, y: .08 + r() * .66 });
+    const status = ASSIGNED.includes(i) ? 'assigned' : 'in_transit';
+    const done = status === 'assigned' ? 0 : 1 + Math.floor(r() * (n - 1));
+    const t = trucks[i]; t.delivery = id;
+    const from = done === 0 ? { x: .1 + r() * .8, y: .1 + r() * .7 } : stops[done - 1];
+    t.from = { x: from.x, y: from.y }; t.to = { x: stops[done].x, y: stops[done].y }; t.f = .15 + r() * .5;
+    Object.assign(t, lerp(t));
+    const created = NOW - 150 - Math.floor(r() * 150), assignedAt = created + 20 + Math.floor(r() * 30), startAt = assignedAt + 15;
+    let tc = startAt + 10;
+    stops.forEach((s, k) => { if (k < done) { s.done = true; s.time = fmt(Math.min(NOW - 5, tc)); tc += 16 + Math.floor(r() * 10); } });
+    let eta = NOW + Math.round(km(t, stops[done]) * 2.4) + 3 + (LATE[i] || 0);
+    stops.forEach((s, k) => { if (k >= done) { s.eta = fmt(eta); eta += 16 + Math.floor(r() * 14); } });
+    const ev = [{ t: fmt(created), text: 'Created by M. Duarte' }, { t: fmt(assignedAt), text: `Assigned to ${t.id} · ${t.driver}` }];
+    if (done > 0) { ev.push({ t: fmt(startAt), text: 'Started' }); stops.slice(0, done).forEach(s => ev.push({ t: s.time, text: s.kind === 'pickup' ? 'Collected at stop 1' : `Delivered at stop ${s.n}` })); }
+    if (LATE[i]) ev.push({ t: fmt(NOW - 4), text: `ETA for stop ${done + 1} moved to ${stops[done].eta}` });
+    dels.push({ id, customer: CUSTOMERS[i], status, truck: t.id, stops, done, late: LATE[i] || 0, created, events: ev.reverse() });
+  }
+  trucks[18].stale = true; trucks[18].lastSeen = NOW - 26;
+  trucks[18].x = .64; trucks[18].y = .34; trucks[18].from = null;
+  dels[18].events.unshift({ t: fmt(NOW - 26), text: 'Last position from KF-19' });
+  trucks[15].parked = true;
+  for (let i = 22; i < 32; i++) {
+    const t = trucks[i];
+    if (t.status === 'offline') continue;
+    if (i < 25 || t.status === 'maintenance') { t.x = DEPOT.x + (r() - .5) * .08; t.y = DEPOT.y + (r() - .5) * .06; }
+    else { t.x = .1 + r() * .8; t.y = .1 + r() * .7; }
+    t.idleSince = NOW - 20 - Math.floor(r() * 60);
+  }
+  [134, 42, 21, 7].forEach((a, k) => {
+    const pick = k === 1 ? SUPPLIER : DEPOT, n = 2 + (k % 2);
+    const stops = [{ n: 1, kind: 'pickup', addr: pick.addr, x: pick.x, y: pick.y }];
+    for (let j = 1; j < n; j++) stops.push({ n: j + 1, kind: 'dropoff', addr: ADDRS[(k * 5 + j + 3) % ADDRS.length], x: .1 + r() * .8, y: .1 + r() * .6 });
+    dels.push({ id: 'DLV-' + (40740 + k), customer: CUSTOMERS[29 + k], status: 'pending', truck: null, stops, done: 0, late: 0, created: NOW - a, events: [{ t: fmt(NOW - a), text: 'Created by M. Duarte' }] });
+  });
+  [['DLV-40702', 'failed', 22, NOW - 21], ['DLV-40703', 'completed', 23, NOW - 35], ['DLV-40704', 'completed', 24, NOW - 58], ['DLV-40705', 'completed', 25, NOW - 80], ['DLV-40706', 'completed', 26, NOW - 105], ['DLV-40707', 'completed', 27, NOW - 130], ['DLV-40708', 'cancelled', null, 9 * 60 + 40]].forEach(([id, status, ti, at], k) => {
+    const tr = ti != null ? trucks[ti] : null;
+    const stops = [{ n: 1, kind: 'pickup', addr: DEPOT.addr, x: DEPOT.x, y: DEPOT.y, done: status !== 'cancelled', time: status !== 'cancelled' ? fmt(at - 70) : null },
+      { n: 2, kind: 'dropoff', addr: ADDRS[(k * 2 + 5) % ADDRS.length], x: .1 + r() * .8, y: .1 + r() * .6, done: status === 'completed', failed: status === 'failed', time: status === 'cancelled' ? null : fmt(at) }];
+    const ev = [{ t: fmt(at - 120), text: 'Created by M. Duarte' }];
+    if (tr) ev.push({ t: fmt(at - 95), text: `Assigned to ${tr.id} · ${tr.driver}` }, { t: fmt(at - 70), text: 'Collected at stop 1' });
+    if (status === 'failed') ev.push({ t: fmt(at - 16), text: 'Arrived at stop 2' }, { t: fmt(at), text: 'Failed · customer unavailable, reported by driver' });
+    if (status === 'completed') ev.push({ t: fmt(at), text: 'Delivered at stop 2' });
+    if (status === 'cancelled') ev.push({ t: fmt(at), text: 'Cancelled by M. Duarte · customer request' });
+    dels.push({ id, customer: CUSTOMERS[22 + k], status, truck: tr ? tr.id : null, stops, done: status === 'completed' ? 2 : 1, late: 0, endAt: at, events: ev.reverse() });
+  });
+  return { trucks, dels };
+}
+function buildEmpty() {
+  return { dels: [], trucks: DRIVERS.map((d, i) => ({ id: plate(i), driver: d, status: i < 26 ? 'available' : i < 28 ? 'maintenance' : 'offline', x: i < 28 ? DEPOT.x + ((i % 7) - 3) * .016 : null, y: i < 28 ? DEPOT.y + (Math.floor(i / 7) - 1.5) * .025 : null, off: (i * 2) % 10, atDepot: true })) };
+}
+const PROPOSAL = { id: 'p1', at: '14:01', title: 'Reassign DLV-40728 from KF-19 to KF-24', delivery: 'DLV-40728', to: 'KF-24',
+  why: "KF-19 has sent no position for 26 minutes. DLV-40728 hasn't been collected yet, and the customer's window opens at 14:45. KF-24 is available and nearest to the pickup.",
+  changes: [{ k: 'DLV-40728 · truck', from: 'KF-19 · Ines Moreau', to: 'KF-24 · Ruth Ellis' }, { k: 'KF-24', from: 'Available', to: 'On delivery' }, { k: 'KF-19', from: 'On delivery', to: 'Available, still on the silent list' }] };
+
+function init(sc) {
+  const base = sc === 'empty' ? buildEmpty() : build();
+  const s = { ...base, sc, sel: null, exp: null, truckSel: null, dFilter: 'all', tFilter: 'all', ask: '', answer: null, asking: false, propOpen: false, proposals: [], propNote: null, hover: null, notes: {}, errs: {}, tab: 'deliveries', sec: 0, creating: false, cf: { customer: '', phone: '', goods: '', pickup: DEPOT.addr, drops: [''], errs: {} }, seq: 45 };
+  if (sc === 'live' || sc === 'narrow') { s.sel = 'DLV-40716'; s.exp = 'DLV-40716'; }
+  if (sc === 'assign') { s.sel = 'DLV-40740'; s.exp = 'DLV-40740'; s.dFilter = 'pending'; s.hover = '__nearest'; }
+  if (sc === 'proposal') { s.propOpen = true; s.proposals = [PROPOSAL]; s.ask = "Which deliveries are running late and who's driving them?"; s.answer = 'late'; s.sel = 'DLV-40728'; s.hover = 'KF-24'; }
+  if (sc === 'empty') s.propOpen = true;
+  return s;
+}
+
+class Component extends DCLogic {
+  state = init(this.props.scenario ?? 'live');
+  componentDidMount() {
+    if (this.state.sc === 'empty') return;
+    this.iv = setInterval(() => this.setState(st => {
+      const sec = st.sec + 2;
+      const trucks = st.trucks.map(t => {
+        if (t.status !== 'on_delivery' || t.stale || t.parked || !t.from || (sec + t.off) % 10 !== 0) return t;
+        const n = { ...t, f: Math.min(.96, t.f + .035) };
+        return Object.assign(n, lerp(n));
+      });
+      return { sec, trucks };
+    }), 2000);
+  }
+  componentWillUnmount() { clearInterval(this.iv); }
+  exceptions() {
+    const { trucks, dels } = this.state, out = [];
+    const avail = trucks.filter(t => t.status === 'available' && t.x != null).length;
+    trucks.filter(t => t.stale).forEach(t => out.push({ key: 'silent-' + t.id, issue: 'Truck silent', subject: `${t.id} · ${t.driver}`, detail: `No position for ${NOW - t.lastSeen} min · ` + (t.delivery ? `on ${t.delivery}, not yet collected` : 'no delivery now'), since: fmt(t.lastSeen), agent: false, act: { truck: t.id, del: t.delivery }, action: 'View', dels: t.delivery ? [t.delivery] : [] }));
+    dels.filter(d => d.status === 'pending' && NOW - d.created >= 120 && avail > 0).forEach(d => out.push({ key: 'pend-' + d.id, issue: 'Pending 2 h+', subject: `${d.id} · ${d.customer}`, detail: `Waiting ${ago(NOW - d.created)} · ${avail} trucks available`, since: fmt(d.created), agent: false, act: { del: d.id }, action: 'Assign', dels: [d.id] }));
+    dels.filter(d => d.status === 'failed' && NOW - d.endAt <= 60).forEach(d => out.push({ key: 'fail-' + d.id, issue: 'Failed', subject: `${d.id} · ${d.customer}`, detail: `Failed ${fmt(d.endAt)} · customer unavailable · goods returning to depot`, since: fmt(d.endAt), agent: false, act: { del: d.id }, action: 'View', dels: [d.id] }));
+    const lateD = dels.find(d => d.id === 'DLV-40725');
+    if (lateD && lateD.status === 'in_transit') out.push({ key: 'agent-late', issue: 'Likely to miss window', subject: `${lateD.id} · ${lateD.customer}`, detail: `Stationary 18 min near stop ${lateD.done}. Next window closes 15:00; ETA now ${lateD.stops[lateD.done].eta}`, since: fmt(NOW - 18), agent: true, act: { del: lateD.id }, action: 'View', dels: [lateD.id] });
+    return out;
+  }
+  renderVals() {
+    const st = this.state, narrow = st.sc === 'narrow' || !!this.props.narrow, empty = st.sc === 'empty';
+    const clock = empty ? '06:12' : fmt(NOW);
+    const set = p => this.setState(p);
+    const T = Object.fromEntries(st.trucks.map(t => [t.id, t]));
+    const exc = this.exceptions(), excDels = new Set(exc.flatMap(x => x.dels));
+    const available = st.trucks.filter(t => t.status === 'available' && t.x != null);
+    const selD = st.dels.find(d => d.id === st.sel) || null;
+    const active = st.dels.filter(d => d.status === 'assigned' || d.status === 'in_transit').length;
+    const pendingN = st.dels.filter(d => d.status === 'pending').length;
+    const selectDel = id => set({ sel: id, exp: id, hover: null, tab: 'deliveries' });
+    const cnt = (k, n, label, color) => { const on = st.dFilter === k; return { n, label, on: String(on), bd: on ? '2px solid var(--ink)' : '1px solid var(--border)', bg: on ? 'var(--surface-200)' : 'var(--surface-100)', numColor: color, onClick: () => set({ dFilter: on ? 'all' : k }) }; };
+    const counts = [cnt('active', active, 'Active', 'var(--ink)'), cnt('pending', pendingN, 'Unassigned', pendingN ? 'var(--status-pending)' : 'var(--ink)'), cnt('attention', exc.length, 'Needs attention', exc.length ? 'var(--attention)' : 'var(--ink)')];
+    const exceptions = exc.map(x => ({ ...x, rule: !x.agent, onView: () => set({ sel: x.act.del || null, exp: x.act.del || null, truckSel: null, dFilter: 'all', hover: x.act.truck || null, tab: 'deliveries' }) }));
+
+    const RANK = { pending: 0, in_transit: 1, assigned: 2, failed: 3, completed: 4, cancelled: 5 };
+    let list = st.dels.slice();
+    if (st.truckSel) list = list.filter(d => d.truck === st.truckSel);
+    const f = st.dFilter;
+    if (f === 'active') list = list.filter(d => d.status === 'assigned' || d.status === 'in_transit');
+    else if (f === 'attention') list = list.filter(d => excDels.has(d.id));
+    else if (f !== 'all') list = list.filter(d => d.status === f);
+    list.sort((a, b) => RANK[a.status] - RANK[b.status] || (a.status === 'pending' ? a.created - b.created : b.late - a.late));
+    const chip = (k, label, n, on, onClick) => ({ label, n, on: String(on), bd: on ? '2px solid var(--ink)' : '1px solid var(--border)', bg: on ? 'var(--ink)' : 'var(--surface-100)', fg: on ? 'var(--surface-100)' : 'var(--ink)', onClick });
+    const cOf = s => st.dels.filter(d => (!st.truckSel || d.truck === st.truckSel) && d.status === s).length;
+    const dChips = [['all', 'All'], ['pending', 'Pending'], ['assigned', 'Assigned'], ['in_transit', 'In transit'], ['failed', 'Failed'], ['completed', 'Completed'], ['cancelled', 'Cancelled']]
+      .map(([k, l]) => chip(k, l, k === 'all' ? st.dels.filter(d => !st.truckSel || d.truck === st.truckSel).length : cOf(k), st.dFilter === k, () => set({ dFilter: k })));
+
+    const rows = list.map(d => {
+      const t = d.truck ? T[d.truck] : null, sel = st.sel === d.id, ex = st.exp === d.id, n = d.stops.length;
+      let line2 = '';
+      if (d.status === 'pending') line2 = `Waiting ${ago(NOW - d.created)} · ${n} stops · pickup ${d.stops[0].addr.split(',')[0]}`;
+      else if (d.status === 'assigned') line2 = `${t.id} · ${t.driver} · heading to pickup`;
+      else if (d.status === 'in_transit') line2 = `${t.id} · ${t.driver} · stop ${d.done + 1} of ${n} · ETA ${d.stops[d.done].eta}`;
+      else if (d.status === 'failed') line2 = `${t.id} · failed ${fmt(d.endAt)} · customer unavailable`;
+      else if (d.status === 'completed') line2 = `${t.id} · delivered ${fmt(d.endAt)}`;
+      else line2 = `Cancelled ${fmt(d.endAt)} · customer request`;
+      const flag = d.late ? `Late ${d.late} min` : excDels.has(d.id) ? 'Needs attention' : null;
+      const stops = d.stops.map((s, i) => {
+        const cur = !s.done && !s.failed && i === d.done && (d.status === 'in_transit' || d.status === 'assigned');
+        const fill = s.done ? 'var(--ink)' : s.failed ? 'var(--status-failed)' : 'var(--surface-100)';
+        let time = s.done ? (s.kind === 'pickup' ? 'Collected ' : 'Delivered ') + s.time : s.failed ? 'Failed ' + s.time : s.eta ? 'ETA ' + s.eta + (cur && d.late ? ` · ${d.late} min late` : '') : d.status === 'cancelled' ? 'Cancelled' : 'Not scheduled';
+        return { n: s.n, kind: s.kind === 'pickup' ? 'Pickup' : 'Drop-off', addr: s.addr, time, dotBg: fill, dotBd: s.done || s.failed ? '2px solid ' + fill : cur ? '3px solid var(--accent)' : '2px solid var(--ink-muted)', numColor: s.done || s.failed ? 'var(--surface-100)' : 'var(--ink)', timeColor: s.failed || (cur && d.late) ? 'var(--attention)' : cur ? 'var(--status-transit)' : 'var(--ink-muted)', lineOp: i === n - 1 ? 0 : 1 };
+      });
+      let cands = [], availLine = '';
+      if (d.status === 'pending' && ex) {
+        const p = d.stops[0];
+        const sorted = available.map(a => ({ a, k: km(a, p) })).sort((x, y) => x.k - y.k);
+        const hov = st.hover === '__nearest' ? (sorted[0] && sorted[0].a.id) : st.hover;
+        availLine = `${sorted.length} available · nearest to pickup first · straight-line distance`;
+        cands = sorted.slice(0, 5).map(({ a, k }) => ({ id: a.id, driver: a.driver, dist: `${k.toFixed(1)} km · about ${Math.max(2, Math.round(k * 2.4))} min to pickup`, aria: `Assign ${a.id}, ${a.driver}, ${k.toFixed(1)} km from pickup`,
+          bd: hov === a.id ? '2px solid var(--focus-ring)' : '1px solid var(--divider)', bg: hov === a.id ? 'var(--status-assigned-bg)' : 'var(--surface-100)',
+          onHover: () => set({ hover: a.id }), onLeave: () => set({ hover: null }), onAssign: () => this.assign(d.id, a.id) }));
+      }
+      return { id: d.id, customer: d.customer, status: d.status, line2, flag, bg: sel ? 'var(--accent-bg)' : 'transparent', ring: sel ? 'inset 0 0 0 2px var(--accent)' : 'none', selStr: String(sel), expanded: ex, expStr: String(ex), expLabel: (ex ? 'Hide' : 'Show') + ' timeline for ' + d.id, chev: ex ? 'rotate(180deg)' : 'none',
+        onSelect: () => set({ sel: sel ? null : d.id, hover: null }), onToggle: () => set({ exp: ex ? null : d.id, sel: d.id }),
+        stops, events: d.events, isPending: d.status === 'pending', cands, availLine, note: st.notes[d.id] || null, err: st.errs[d.id] || null };
+    });
+
+    const tList = st.trucks.filter(t => st.tFilter === 'all' || t.status === st.tFilter);
+    const tChips = [['all', 'All'], ['available', 'Available'], ['on_delivery', 'On delivery'], ['maintenance', 'Maintenance'], ['offline', 'Offline']]
+      .map(([k, l]) => chip(k, l, k === 'all' ? st.trucks.length : st.trucks.filter(t => t.status === k).length, st.tFilter === k, () => set({ tFilter: k })));
+    const tRank = t => t.stale ? 0 : { on_delivery: 1, available: 2, maintenance: 3, offline: 4 }[t.status];
+    const truckRows = tList.slice().sort((a, b) => tRank(a) - tRank(b) || a.id.localeCompare(b.id)).map(t => {
+      const sel = st.truckSel === t.id || (selD && selD.truck === t.id);
+      let sub, dotColor = 'var(--status-completed)', dotStyle = 'solid', dotFill = 'var(--status-completed)', w = 400;
+      if (t.stale) { sub = `No position for ${NOW - t.lastSeen} min${t.delivery ? ' · ' + t.delivery : ''}`; dotColor = 'var(--marker-stale)'; dotStyle = 'dashed'; dotFill = 'transparent'; w = 700; }
+      else if (t.status === 'on_delivery') sub = `${t.delivery} · ping ${(st.sec + t.off) % 10 || 10} s ago`;
+      else if (t.status === 'available') sub = t.atDepot ? 'At depot · ping just now' : `Free since ${fmt(t.idleSince)} · ${km(t, DEPOT).toFixed(1)} km from depot`;
+      else if (t.status === 'maintenance') { sub = 'In workshop until 16:00'; dotColor = dotFill = 'var(--ink-muted)'; }
+      else { sub = 'No position reported today'; dotColor = 'var(--ink-muted)'; dotFill = 'transparent'; }
+      return { id: t.id, driver: t.driver, status: t.status, sub, dotColor, dotStyle, dotFill, subWeight: w, selStr: String(sel), bg: sel ? 'var(--accent-bg)' : 'transparent', ring: sel ? 'inset 0 0 0 2px var(--accent)' : 'none',
+        onSelect: () => set({ truckSel: st.truckSel === t.id ? null : t.id, sel: null, exp: null, dFilter: 'all' }) };
+    });
+
+    const hl = new Set();
+    if (selD && selD.truck) hl.add(selD.truck);
+    if (st.truckSel) hl.add(st.truckSel);
+    let hov = st.hover;
+    if (hov === '__nearest' && selD) { const p = selD.stops[0]; const s = available.slice().sort((a, b) => km(a, p) - km(b, p)); hov = s[0] && s[0].id; }
+    if (hov) hl.add(hov);
+    const pendingSel = selD && selD.status === 'pending';
+    const mTrucks = st.trucks.filter(t => t.x != null && t.status !== 'maintenance').map(t => {
+      const big = hl.has(t.id) || t.stale || (pendingSel && t.status === 'available');
+      return { id: t.id, x: t.x, y: t.y, state: t.stale ? 'stale' : t.status === 'on_delivery' ? 'live' : 'idle', size: big ? 'md' : 'sm', selected: hl.has(t.id), label: t.stale ? `${t.id} · ${NOW - t.lastSeen} min` : hl.has(t.id) ? t.id : null, aria: `${t.id}, ${t.driver}, ${TL[t.status]}${t.stale ? ', no position for ' + (NOW - t.lastSeen) + ' minutes' : ''}` };
+    });
+    let mStops = [], route = null, doneCount = 0, links = [], note = null;
+    if (selD) {
+      mStops = selD.stops.map(s => ({ id: s.n, n: s.n, kind: s.kind, x: s.x, y: s.y, done: s.done }));
+      const t = selD.truck ? T[selD.truck] : null;
+      const pts = selD.stops.map(s => [s.x, s.y]);
+      if (selD.status === 'in_transit' && t) { route = [...pts.slice(0, selD.done), [t.x, t.y], ...pts.slice(selD.done)]; doneCount = selD.done + 1; }
+      else { route = pts; doneCount = selD.status === 'completed' ? pts.length : 0; }
+      if (selD.status === 'assigned' && t) links.push({ a: [t.x, t.y], b: pts[0] });
+      if (hov && T[hov] && (pendingSel || st.sc === 'proposal')) links.push({ a: [T[hov].x, T[hov].y], b: pts[0] });
+      note = `${selD.id} · ${selD.customer}`;
+    } else if (st.truckSel) note = `${st.truckSel} · ${T[st.truckSel].driver}`;
+    if (empty) note = 'Start of shift · 26 trucks at the depot';
+
+    const late = st.dels.filter(d => d.status === 'in_transit' && d.late > 0).sort((a, b) => b.late - a.late);
+    const answer = st.answer === 'late' ? {
+      title: `${late.length} deliveries are running late`,
+      rows: late.map(d => ({ text: `${d.id} · ${d.customer} · ${d.late} min late`, sub: `${T[d.truck].driver} driving ${d.truck} · stop ${d.done + 1} of ${d.stops.length}, now ETA ${d.stops[d.done].eta}`, onClick: () => selectDel(d.id) })),
+      foot: `From positions at ${fmt(NOW)}. Late means 10+ minutes past the stop's promised time.`,
+    } : st.answer === 'other' ? { title: "I can answer questions about today's deliveries, trucks and positions.", rows: [], foot: 'For example: which trucks are free near Wakefield, or which deliveries are running late.' } : null;
+
+    const pane = narrow
+      ? { left: st.tab === 'deliveries' ? 'flex' : 'none', map: st.tab === 'map' ? 'block' : 'none', right: st.tab === 'trucks' ? 'flex' : 'none', prop: st.tab === 'proposals' ? 'flex' : 'none', leftFlex: '1 1 auto', rightFlex: '1 1 auto', propFlex: '1 1 auto' }
+      : { left: 'flex', map: 'block', right: 'flex', prop: 'flex', leftFlex: '0 0 400px', rightFlex: '0 0 300px', propFlex: st.propOpen ? '0 0 340px' : '0 0 56px' };
+    const propOpen = narrow ? true : st.propOpen;
+    const tabs = [['deliveries', 'Deliveries'], ['map', 'Map'], ['trucks', 'Trucks'], ['proposals', 'Proposals']].map(([k, l]) => { const on = st.tab === k; return { label: l, on: String(on), bd: on ? '2px solid var(--ink)' : '1px solid var(--border)', bg: on ? 'var(--ink)' : 'var(--surface-100)', fg: on ? 'var(--surface-100)' : 'var(--ink)', onClick: () => set({ tab: k }) }; });
+    const HC = { active: 'Active', attention: 'Needs attention' };
+
+    const c = st.cf, bdE = e => e ? '2px solid var(--attention)' : '1px solid var(--border)';
+    const setCf = p => this.setState(s => ({ cf: { ...s.cf, ...p } }));
+    const cf = {
+      isOpen: st.creating, closed: !st.creating, customer: c.customer, phone: c.phone, goods: c.goods, pickup: c.pickup,
+      customerErr: c.errs.customer || null, customerBd: bdE(c.errs.customer), pickupErr: c.errs.pickup || null, pickupBd: bdE(c.errs.pickup),
+      onCustomer: e => setCf({ customer: e.target.value }), onPhone: e => setCf({ phone: e.target.value }), onGoods: e => setCf({ goods: e.target.value }), onPickup: e => setCf({ pickup: e.target.value }),
+      drops: c.drops.map((v, i) => { const err = c.errs['d' + i]; return { value: v, label: `Stop ${i + 2} · Drop-off`, err: err || null, bd: bdE(err), canRemove: c.drops.length > 1, removeAria: `Remove stop ${i + 2}`,
+        onChange: e => { const d = c.drops.slice(); d[i] = e.target.value; setCf({ drops: d }); }, onRemove: () => setCf({ drops: c.drops.filter((_, j) => j !== i), errs: {} }) }; }),
+      addDrop: () => setCf({ drops: [...c.drops, ''] }),
+      open: () => set({ creating: true, tab: 'deliveries' }), cancel: () => set({ creating: false }),
+      submit: e => { e.preventDefault(); this.create(); },
+    };
+    return {
+      cf, delTotal: st.dels.length,
+      rootClass: this.props.dark ? 'dark' : '', dir: this.props.dir ?? 'ltr',
+      rootH: narrow ? 'auto' : (this.props.height ?? '100vh'), rootOverflow: narrow ? 'visible' : 'hidden',
+      hdrCols: narrow ? 'minmax(0,1fr)' : '360px minmax(0,1fr)', mainFlex: narrow ? '0 0 auto' : '1 1 auto', mainDir: narrow ? 'column' : 'row', mapH: narrow ? '420px' : 'auto',
+      narrow, tabs, clock, counts, exceptions, excCount: exc.length, showExcTable: exc.length > 0 && !narrow, showExcStack: exc.length > 0 && narrow, noExc: exc.length === 0,
+      ask: st.ask, onAskChange: e => set({ ask: e.target.value }),
+      onAsk: e => { e.preventDefault(); const q = st.ask.toLowerCase(); set({ asking: true, answer: null }); setTimeout(() => this.setState({ asking: false, answer: /late|behind|delay|slow/.test(q) ? 'late' : 'other' }), 700); },
+      asking: st.asking, hasAnswer: !!answer, answer: answer || { rows: [] }, dismissAnswer: () => set({ answer: null }),
+      truckChip: st.truckSel ? `Truck ${st.truckSel}` : null, clearTruck: () => set({ truckSel: null }),
+      headerChip: HC[st.dFilter] || null, clearHeader: () => set({ dFilter: 'all' }),
+      dChips, rows, noDeliveries: st.dels.length === 0, noMatch: st.dels.length > 0 && rows.length === 0, clearAll: () => set({ dFilter: 'all', truckSel: null }),
+      availCount: available.length,
+      map: { stops: mStops, trucks: mTrucks, route, doneCount, links, note },
+      onTruck: id => set({ truckSel: st.truckSel === id ? null : id, sel: null, exp: null, dFilter: 'all' }),
+      truckTotal: st.trucks.length, tChips, truckRows, pane,
+      propCollapsed: !propOpen, propExpanded: propOpen, toggleProp: () => set({ propOpen: !st.propOpen }),
+      propCount: st.proposals.length, propAria: `Open agent proposals, ${st.proposals.length} waiting`,
+      propBadgeBg: st.proposals.length ? 'var(--agent)' : 'var(--surface-100)', propBadgeFg: st.proposals.length ? 'var(--surface-100)' : 'var(--agent)',
+      noProps: st.proposals.length === 0, propNote: st.propNote, propLastCheck: `Last checked ${empty ? '06:10' : fmt(NOW - 1)} · ${st.dels.length} deliveries, ${st.trucks.length} trucks`,
+      proposals: st.proposals.map(p => ({ ...p, onShow: () => set({ sel: p.delivery, exp: p.delivery, hover: p.to }), onApprove: () => this.approve(p), onReject: () => set({ proposals: st.proposals.filter(x => x.id !== p.id), propNote: `Rejected. The agent won't propose this change for ${p.delivery} again this shift.`, hover: null }) })),
+    };
+  }
+  create() {
+    const st = this.state, c = st.cf, errs = {};
+    if (!c.customer.trim()) errs.customer = 'Enter the customer';
+    if (!c.pickup.trim()) errs.pickup = 'Enter the pickup address';
+    c.drops.forEach((d, i) => { if (!d.trim()) errs['d' + i] = 'Enter an address or remove this stop'; });
+    if (Object.keys(errs).length) return this.setState({ cf: { ...c, errs } });
+    const r = rng(st.seq * 7), id = 'DLV-407' + st.seq, t = st.sc === 'empty' ? '06:12' : fmt(NOW);
+    const stops = [{ n: 1, kind: 'pickup', addr: c.pickup.trim(), x: DEPOT.x, y: DEPOT.y }, ...c.drops.map((a, i) => ({ n: i + 2, kind: 'dropoff', addr: a.trim(), x: .1 + r() * .8, y: .1 + r() * .6 }))];
+    const d = { id, customer: c.customer.trim(), status: 'pending', truck: null, stops, done: 0, late: 0, created: NOW, events: [{ t, text: 'Created by you' }] };
+    this.setState({ dels: [d, ...st.dels], creating: false, sel: id, exp: id, dFilter: 'all', truckSel: null, seq: st.seq + 1, notes: { ...st.notes, [id]: `Created ${id}. Assign a truck below, or leave it pending.` }, cf: { customer: '', phone: '', goods: '', pickup: DEPOT.addr, drops: [''], errs: {} } });
+  }
+  assign(did, tid) {
+    if (tid === 'KF-25' && !this.state.conflicted) {
+      return this.setState(st => ({ conflicted: true, errs: { ...st.errs, [did]: '409 · truck KF-25 is already on delivery DLV-40733' }, notes: { ...st.notes, [did]: null },
+        trucks: st.trucks.map(x => x.id === 'KF-25' ? { ...x, status: 'on_delivery', delivery: 'DLV-40733' } : x), hover: null }));
+    }
+    this.setState(st => ({ errs: { ...st.errs, [did]: null } }));
+    this.setState(st => {
+      const d = st.dels.find(x => x.id === did), t = st.trucks.find(x => x.id === tid), p = d.stops[0];
+      return {
+        dels: st.dels.map(x => x.id === did ? { ...x, status: 'assigned', truck: tid, events: [{ t: fmt(NOW), text: `Assigned to ${tid} · ${t.driver} (you)` }, ...x.events] } : x),
+        trucks: st.trucks.map(x => x.id === tid ? { ...x, status: 'on_delivery', delivery: did, from: { x: x.x, y: x.y }, to: { x: p.x, y: p.y }, f: 0 } : x),
+        notes: { ...st.notes, [did]: `Assigned ${tid}. ${t.driver} has the delivery on their phone.` }, hover: null,
+        sel: did, exp: did, dFilter: st.dFilter === 'pending' ? 'all' : st.dFilter,
+      };
+    });
+  }
+  approve(p) {
+    this.setState(st => {
+      const d = st.dels.find(x => x.id === p.delivery), pk = d.stops[0];
+      return {
+        dels: st.dels.map(x => x.id === p.delivery ? { ...x, truck: p.to, events: [{ t: fmt(NOW), text: `Reassigned from KF-19 to ${p.to} · agent proposal approved by you` }, ...x.events] } : x),
+        trucks: st.trucks.map(x => x.id === p.to ? { ...x, status: 'on_delivery', delivery: p.delivery, from: { x: x.x, y: x.y }, to: { x: pk.x, y: pk.y }, f: 0 } : x.id === 'KF-19' ? { ...x, status: 'available', delivery: null } : x),
+        proposals: st.proposals.filter(x => x.id !== p.id), propNote: `Approved. ${p.to} has DLV-40728; its driver has been notified.`, hover: null,
+      };
+    });
+  }
+}
+</script>
+</body>
+</html>

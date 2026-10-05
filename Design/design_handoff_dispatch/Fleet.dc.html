@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="dispatch-tokens.css">
+<style>*{box-sizing:border-box} body{margin:0;font-family:var(--font-sans);color:var(--ink);background:var(--surface-200);-webkit-font-smoothing:antialiased} a{color:var(--status-assigned)} a:hover{color:var(--ink)}</style>
+</helmet>
+<div class="{{rootClass}}" dir="{{dir}}" style="min-height:100vh;display:flex;flex-direction:column;background:var(--surface-200);color:var(--ink)">
+  <header style="display:flex;align-items:center;justify-content:space-between;gap:12px 24px;flex-wrap:wrap;padding:12px 24px;background:var(--surface-100);border-bottom:1px solid var(--border)">
+    <div style="display:flex;align-items:baseline;gap:8px 24px;flex-wrap:wrap">
+      <span class="t-h2">Kestrel Freight · Dispatch</span>
+      <nav aria-label="Dispatch" style="display:flex;gap:4px;flex-wrap:wrap">
+        <a href="Dispatcher Console.dc.html" style="display:inline-flex;align-items:center;min-height:44px;padding:0 12px;border-radius:8px;color:var(--ink);text-decoration:none;font:600 14px var(--font-sans)">Console</a>
+        <a href="Fleet.dc.html" aria-current="page" style="display:inline-flex;align-items:center;min-height:44px;padding:0 12px;border-radius:8px;background:var(--ink);color:var(--surface-100);text-decoration:none;font:600 14px var(--font-sans)">Fleet</a>
+        <a href="Operator Settings.dc.html" style="display:inline-flex;align-items:center;min-height:44px;padding:0 12px;border-radius:8px;color:var(--ink);text-decoration:none;font:600 14px var(--font-sans)">Settings</a>
+      </nav>
+    </div>
+    <div role="tablist" aria-label="Fleet" style="display:flex;gap:8px">
+      <sc-for list="{{tabs}}" as="t"><button type="button" role="tab" aria-selected="{{t.on}}" onClick="{{t.onClick}}" style="min-height:44px;padding:0 16px;border-radius:999px;border:{{t.bd}};background:{{t.bg}};color:{{t.fg}};font:600 14px var(--font-sans);cursor:pointer;display:inline-flex;align-items:center;gap:8px">{{t.label}}<span class="t-mono-sm">{{t.n}}</span></button></sc-for>
+    </div>
+  </header>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:24px;padding:24px;align-items:start">
+    <section aria-label="{{listTitle}}" style="display:flex;flex-direction:column;background:var(--surface-100);border:1px solid var(--border);border-radius:12px;min-width:0;grid-column:span 2;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 16px;border-bottom:1px solid var(--divider)">
+        <h1 class="t-h1" style="margin:0">{{listTitle}}</h1>
+        <label style="display:flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;border:1px solid var(--border);border-radius:8px;min-width:240px;flex:0 1 320px"><span class="t-label" style="color:var(--ink-muted)">Find</span><input value="{{q}}" onChange="{{onQ}}" placeholder="{{searchHint}}" aria-label="{{searchHint}}" style="flex:1;min-width:0;min-height:40px;border:0;background:transparent;font:400 14px var(--font-sans);color:var(--ink)"></label>
+      </div>
+      <div role="table" aria-label="{{listTitle}}" style="display:flex;flex-direction:column;overflow:auto;max-height:720px">
+        <div role="row" class="t-label" style="display:grid;grid-template-columns:{{cols}};gap:12px;padding:8px 16px;color:var(--ink-muted);background:var(--surface-200);position:sticky;top:0;z-index:1">
+          <sc-for list="{{heads}}" as="h"><span role="columnheader">{{h}}</span></sc-for>
+        </div>
+        <sc-for list="{{rows}}" as="r" hint-placeholder-count="10">
+          <div role="row" style="display:grid;grid-template-columns:{{cols}};gap:12px;align-items:center;min-height:52px;padding:6px 16px;border-bottom:1px solid var(--divider);background:{{r.bg}}">
+            <span role="cell" style="display:flex;flex-direction:column;min-width:0"><span class="t-mono" style="font-weight:700;overflow-wrap:anywhere">{{r.c1}}</span><sc-if value="{{r.isNew}}"><span class="t-label" style="color:var(--status-completed)">Just added</span></sc-if></span>
+            <span role="cell" class="t-body-sm" style="overflow-wrap:anywhere">{{r.c2}}</span>
+            <span role="cell" class="t-body-sm" style="overflow-wrap:anywhere;color:{{r.c3Color}}">{{r.c3}}</span>
+            <span role="cell"><sc-if value="{{r.pill}}"><dc-import name="StatusPill" status="{{r.pill}}" size="sm" hint-size="84px,22px"></dc-import></sc-if><sc-if value="{{r.c4}}"><span class="t-body-sm" style="color:{{r.c4Color}};font-weight:600">{{r.c4}}</span></sc-if></span>
+            <span role="cell" class="t-body-sm" style="overflow-wrap:anywhere;color:var(--ink-muted)">{{r.c5}}</span>
+          </div>
+        </sc-for>
+        <sc-if value="{{noRows}}"><div class="t-body" style="padding:24px 16px;color:var(--ink-muted)">{{emptyText}}</div></sc-if>
+      </div>
+    </section>
+
+    <aside style="display:flex;flex-direction:column;gap:16px;min-width:0">
+      <sc-if value="{{isTrucks}}">
+        <form onSubmit="{{t.submit}}" novalidate="{{true}}" aria-label="Add a truck" style="display:flex;flex-direction:column;gap:16px;padding:20px;background:var(--surface-100);border:2px solid var(--ink);border-radius:12px">
+          <h2 class="t-h1" style="margin:0">Add a truck</h2>
+          <sc-if value="{{t.conflict}}"><div role="alert" style="display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:1px solid var(--status-failed);background:var(--status-failed-bg);border-radius:8px"><span class="t-body-sm" style="font-weight:700">Not added</span><span class="t-mono">{{t.conflict}}</span></div></sc-if>
+          <sc-if value="{{t.ok}}"><div role="status" class="t-body-sm" style="padding:10px 12px;border:1px solid var(--status-completed);background:var(--status-completed-bg);border-radius:8px;font-weight:600">{{t.ok}}</div></sc-if>
+          <label style="display:flex;flex-direction:column;gap:6px"><span class="t-h3">Plate number</span><input value="{{t.plate}}" onChange="{{t.onPlate}}" autocomplete="off" style="min-height:44px;padding:0 12px;border:{{t.plateBd}};border-radius:8px;font:500 15px var(--font-mono);color:var(--ink);background:var(--surface-100);text-transform:uppercase"><span class="t-body-sm" style="color:{{t.plateHintColor}};font-weight:{{t.plateHintWeight}}">{{t.plateHint}}</span></label>
+          <label style="display:flex;flex-direction:column;gap:6px"><span class="t-h3">Make and model <span style="font-weight:400;color:var(--ink-muted)">(optional)</span></span><input value="{{t.model}}" onChange="{{t.onModel}}" style="min-height:44px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font:400 15px var(--font-sans);color:var(--ink);background:var(--surface-100)"></label>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+            <label style="display:flex;flex-direction:column;gap:6px"><span class="t-h3">Payload ({{massUnit}})</span><input value="{{t.payload}}" onChange="{{t.onPayload}}" inputmode="numeric" style="min-height:44px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font:400 15px var(--font-mono);color:var(--ink);background:var(--surface-100)"></label>
+            <label style="display:flex;flex-direction:column;gap:6px"><span class="t-h3">Pallet spaces</span><input value="{{t.pallets}}" onChange="{{t.onPallets}}" inputmode="numeric" style="min-height:44px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font:400 15px var(--font-mono);color:var(--ink);background:var(--surface-100)"></label>
+          </div>
+          <fieldset style="margin:0;padding:0;border:0;display:flex;flex-direction:column;gap:6px">
+            <legend class="t-h3" style="padding:0;margin-bottom:6px">Starts as</legend>
+            <div style="display:flex;gap:8px;flex-wrap:wrap"><sc-for list="{{t.statusOpts}}" as="o"><button type="button" role="radio" aria-checked="{{o.on}}" onClick="{{o.pick}}" style="min-height:44px;padding:0 14px;border-radius:999px;border:{{o.bd}};background:{{o.bg}};color:{{o.fg}};font:600 14px var(--font-sans);cursor:pointer">{{o.l}}</button></sc-for></div>
+          </fieldset>
+          <button type="submit" style="min-height:48px;border:0;border-radius:8px;background:var(--ink);color:var(--surface-100);font:700 15px var(--font-sans);cursor:pointer">Add truck</button>
+        </form>
+      </sc-if>
+      <sc-if value="{{isDrivers}}">
+        <form onSubmit="{{d.submit}}" novalidate="{{true}}" aria-label="Add a driver" style="display:flex;flex-direction:column;gap:16px;padding:20px;background:var(--surface-100);border:2px solid var(--ink);border-radius:12px">
+          <h2 class="t-h1" style="margin:0">Add a driver</h2>
+          <sc-if value="{{d.conflict}}"><div role="alert" style="display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:1px solid var(--status-failed);background:var(--status-failed-bg);border-radius:8px"><span class="t-body-sm" style="font-weight:700">Not added</span><span class="t-mono">{{d.conflict}}</span></div></sc-if>
+          <sc-if value="{{d.ok}}"><div role="status" class="t-body-sm" style="padding:10px 12px;border:1px solid var(--status-completed);background:var(--status-completed-bg);border-radius:8px;font-weight:600">{{d.ok}}</div></sc-if>
+          <label style="display:flex;flex-direction:column;gap:6px"><span class="t-h3">Full name</span><input value="{{d.name}}" onChange="{{d.onName}}" autocomplete="off" style="min-height:44px;padding:0 12px;border:{{d.nameBd}};border-radius:8px;font:400 15px var(--font-sans);color:var(--ink);background:var(--surface-100)"><sc-if value="{{d.nameErr}}"><span class="t-body-sm" style="color:var(--attention);font-weight:600">{{d.nameErr}}</span></sc-if></label>
+          <label style="display:flex;flex-direction:column;gap:6px"><span class="t-h3">Mobile phone</span><input value="{{d.phone}}" onChange="{{d.onPhone}}" type="tel" autocomplete="off" style="min-height:44px;padding:0 12px;border:{{d.phoneBd}};border-radius:8px;font:400 15px var(--font-mono);color:var(--ink);background:var(--surface-100)"><span class="t-body-sm" style="color:{{d.phoneHintColor}};font-weight:{{d.phoneHintWeight}}">{{d.phoneHint}}</span></label>
+          <label style="display:flex;flex-direction:column;gap:6px"><span class="t-h3">Usual truck <span style="font-weight:400;color:var(--ink-muted)">(optional)</span></span>
+            <select value="{{d.truck}}" onChange="{{d.onTruck}}" style="min-height:44px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font:400 15px var(--font-sans);color:var(--ink);background:var(--surface-100)">
+              <option value="">None — assign per delivery</option>
+              <sc-for list="{{d.truckOpts}}" as="o"><option value="{{o.v}}">{{o.l}}</option></sc-for>
+            </select>
+            <span class="t-body-sm" style="color:var(--ink-muted)">Only trucks with no usual driver are listed.</span>
+          </label>
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer"><input type="checkbox" checked="{{d.sms}}" onChange="{{d.onSms}}" style="width:22px;height:22px;margin:11px;accent-color:var(--ink)"><span style="display:flex;flex-direction:column;gap:2px;padding-top:10px"><span class="t-h3">Text the driver a link to the app</span><span class="t-body-sm" style="color:var(--ink-muted)">They open it once on their phone; no password.</span></span></label>
+          <button type="submit" style="min-height:48px;border:0;border-radius:8px;background:var(--ink);color:var(--surface-100);font:700 15px var(--font-sans);cursor:pointer">Add driver</button>
+        </form>
+      </sc-if>
+      <div style="display:flex;flex-direction:column;gap:8px;padding:16px 20px;border:1px solid var(--border);border-radius:12px;background:var(--surface-100)">
+        <span class="t-h3">{{fieldsTitle}}</span>
+        <ul class="t-body-sm" style="margin:0;padding-inline-start:18px;display:flex;flex-direction:column;gap:6px;color:var(--ink-muted)">
+          <sc-for list="{{fieldsNotes}}" as="n"><li>{{n}}</li></sc-for>
+        </ul>
+      </div>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;tab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;trucks&quot;,&quot;drivers&quot;],&quot;default&quot;:&quot;trucks&quot;,&quot;tsType&quot;:&quot;'trucks'|'drivers'&quot;},&quot;dark&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;dir&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;ltr&quot;,&quot;rtl&quot;],&quot;default&quot;:&quot;ltr&quot;,&quot;tsType&quot;:&quot;'ltr'|'rtl'&quot;}}">
+const DRIVERS = ['Amaka Obi', 'Dele Harrow', 'Priya Nair', 'Tomasz Wójcik', 'Siobhan Kelly', 'Yusuf Demir', 'Grace Mensah', 'Liam Walsh', 'Chen Wei', 'Marta Silva', 'Kwame Asante', 'Hannah Brooks', 'Imran Qureshi', 'Zofia Nowak', 'Oluwaseun Adeyemi', 'Farah Haddad', 'Ben Carter', 'Aisha Bello', 'Ines Moreau', 'Megan Price', 'Dmitri Volkov', 'Leila Ahmadi', 'Sam Whitaker', 'Ruth Ellis', 'Callum Reid', 'Rui Costa', 'Jonas Berg', 'Nadia Rahman', 'Arjun Mehta', 'Chloe Dunn'];
+const MODELS = ['Mercedes-Benz Atego 1224', 'DAF LF 230', 'Iveco Eurocargo 120E', 'Volvo FL 250', 'Ford Transit 350 L4'];
+const plate = i => 'KF-' + String(i + 1).padStart(2, '0');
+const norm = s => s.replace(/[\s\-.]/g, '').toUpperCase();
+const cap = t => { const a = []; if (t.payload) a.push(t.payload.toLocaleString() + ' kg'); if (t.pallets) a.push(t.pallets + ' pallets'); return a.length ? a.join(' · ') : 'Capacity not set'; };
+const normPhone = s => s.replace(/[^\d+]/g, '');
+function seed() {
+  const trucks = [], drivers = [];
+  for (let i = 0; i < 32; i++) {
+    const m = MODELS[i % 5], van = m.includes('Transit');
+    trucks.push({ id: plate(i), model: m, payload: van ? 1400 : 5500 + (i % 3) * 1500, pallets: van ? 2 : 10 + (i % 3) * 2, status: i < 22 ? 'on_delivery' : i < 29 ? 'available' : i < 31 ? 'maintenance' : 'offline', driver: i < 30 ? DRIVERS[i] : null });
+  }
+  DRIVERS.forEach((n, i) => drivers.push({ name: n, phone: '+44 7700 900' + String(100 + i * 7).slice(-3), truck: plate(i), app: i < 29 ? 'today' : 'never' }));
+  return { trucks, drivers };
+}
+const blankT = { plate: '', model: '', payload: '', pallets: '', status: 'available', errs: {}, conflict: null, ok: null };
+const blankD = { name: '', phone: '', truck: '', sms: true, errs: {}, conflict: null, ok: null };
+class Component extends DCLogic {
+  state = { ...seed(), tab: this.props.tab ?? 'trucks', q: '', tf: { ...blankT }, df: { ...blankD }, fresh: null };
+  renderVals() {
+    const st = this.state, isT = st.tab === 'trucks', q = st.q.trim().toLowerCase();
+    const setT = p => this.setState(s => ({ tf: { ...s.tf, ...p, conflict: null, ok: null } }));
+    const setD = p => this.setState(s => ({ df: { ...s.df, ...p, conflict: null, ok: null } }));
+    const bd = e => e ? '2px solid var(--attention)' : '1px solid var(--border)';
+    const tabs = [['trucks', 'Trucks', st.trucks.length], ['drivers', 'Drivers', st.drivers.length]].map(([k, l, n]) => { const on = st.tab === k; return { label: l, n, on: String(on), bd: on ? '2px solid var(--ink)' : '1px solid var(--border)', bg: on ? 'var(--ink)' : 'var(--surface-100)', fg: on ? 'var(--surface-100)' : 'var(--ink)', onClick: () => this.setState({ tab: k, q: '' }) }; });
+    let rows;
+    if (isT) rows = st.trucks.filter(t => !q || (t.id + ' ' + t.model + ' ' + (t.driver || '')).toLowerCase().includes(q)).map(t => ({
+      c1: t.id, c2: t.model || 'Model not given', c3: cap(t), c3Color: t.payload || t.pallets ? 'var(--ink)' : 'var(--ink-muted)', pill: t.status, c4: null, c5: t.driver || 'No usual driver', isNew: st.fresh === t.id, bg: st.fresh === t.id ? 'var(--status-completed-bg)' : 'transparent' }));
+    else rows = st.drivers.filter(d => !q || (d.name + ' ' + d.phone + ' ' + (d.truck || '')).toLowerCase().includes(q)).map(d => ({
+      c1: d.name, c2: d.phone, c3: d.truck || 'Assigned per delivery', c3Color: d.truck ? 'var(--ink)' : 'var(--ink-muted)', pill: null,
+      c4: d.app === 'today' ? 'Signed in today' : d.app === 'sent' ? 'Link sent' : 'Not signed in yet', c4Color: d.app === 'today' ? 'var(--status-completed)' : d.app === 'sent' ? 'var(--status-assigned)' : 'var(--ink-muted)',
+      c5: '', isNew: st.fresh === d.phone, bg: st.fresh === d.phone ? 'var(--status-completed-bg)' : 'transparent' }));
+    const tf = st.tf, df = st.df;
+    const usedTrucks = new Set(st.drivers.map(d => d.truck).filter(Boolean));
+    const t = {
+      plate: tf.plate, model: tf.model, payload: tf.payload, pallets: tf.pallets, conflict: tf.conflict, ok: tf.ok,
+      plateBd: bd(tf.errs.plate), plateHint: tf.errs.plate || 'As on the vehicle. Spaces, hyphens and dots are ignored when checking for duplicates.', plateHintColor: tf.errs.plate ? 'var(--attention)' : 'var(--ink-muted)', plateHintWeight: tf.errs.plate ? 600 : 400,
+      onPlate: e => setT({ plate: e.target.value }), onModel: e => setT({ model: e.target.value }), onPayload: e => setT({ payload: e.target.value.replace(/[^\d]/g, '') }), onPallets: e => setT({ pallets: e.target.value.replace(/[^\d]/g, '') }),
+      statusOpts: [['available', 'Available'], ['maintenance', 'In maintenance']].map(([k, l]) => { const on = tf.status === k; return { l, on: String(on), bd: on ? '2px solid var(--ink)' : '1px solid var(--border)', bg: on ? 'var(--ink)' : 'var(--surface-100)', fg: on ? 'var(--surface-100)' : 'var(--ink)', pick: () => setT({ status: k }) }; }),
+      submit: e => { e.preventDefault();
+        const p = tf.plate.trim().replace(/\s+/g, ' ').toUpperCase(), key = norm(tf.plate);
+        if (!key) return this.setState({ tf: { ...tf, errs: { plate: 'Enter the plate number' } } });
+        const dup = st.trucks.find(x => norm(x.id) === key);
+        if (dup) return this.setState({ tf: { ...tf, errs: {}, conflict: `409 · truck with plate_number "${dup.id}" already exists` } });
+        const nt = { id: p, model: tf.model.trim(), payload: +tf.payload || null, pallets: +tf.pallets || null, status: tf.status, driver: null };
+        this.setState({ trucks: [nt, ...st.trucks], fresh: p, tf: { ...blankT, ok: `Added ${p}. It shows as ${tf.status === 'available' ? 'Available' : 'Maintenance'} in the console now; it appears on the map after its first position.` } }); },
+    };
+    const d = {
+      name: df.name, phone: df.phone, truck: df.truck, sms: df.sms, conflict: df.conflict, ok: df.ok,
+      nameErr: df.errs.name || null, nameBd: bd(df.errs.name), phoneBd: bd(df.errs.phone),
+      phoneHint: df.errs.phone || 'Include the country code, e.g. +44. Used for calls from dispatch and the app link.', phoneHintColor: df.errs.phone ? 'var(--attention)' : 'var(--ink-muted)', phoneHintWeight: df.errs.phone ? 600 : 400,
+      onName: e => setD({ name: e.target.value }), onPhone: e => setD({ phone: e.target.value }), onTruck: e => setD({ truck: e.target.value }), onSms: e => setD({ sms: e.target.checked }),
+      truckOpts: st.trucks.filter(x => !usedTrucks.has(x.id)).map(x => ({ v: x.id, l: `${x.id} · ${x.model || 'model not given'}` })),
+      submit: e => { e.preventDefault(); const errs = {}, ph = normPhone(df.phone);
+        if (!df.name.trim()) errs.name = 'Enter the driver\'s name';
+        if (!ph) errs.phone = 'Enter a mobile number'; else if (!/^\+\d{7,15}$/.test(ph)) errs.phone = 'Start with + and the country code, then the number';
+        if (Object.keys(errs).length) return this.setState({ df: { ...df, errs } });
+        if (st.drivers.some(x => normPhone(x.phone) === ph)) return this.setState({ df: { ...df, errs: {}, conflict: `409 · driver with phone "${ph}" already exists` } });
+        const nd = { name: df.name.trim(), phone: df.phone.trim(), truck: df.truck || null, app: df.sms ? 'sent' : 'never' };
+        this.setState({ drivers: [nd, ...st.drivers], fresh: nd.phone, df: { ...blankD, ok: `Added ${nd.name}.${df.sms ? ' App link texted to ' + nd.phone + '.' : ''}` } }); },
+    };
+    return {
+      rootClass: this.props.dark ? 'dark' : '', dir: this.props.dir ?? 'ltr', tabs, isTrucks: isT, isDrivers: !isT, t, d,
+      listTitle: isT ? 'Trucks' : 'Drivers', searchHint: isT ? 'Plate, model or driver' : 'Name, phone or truck', q: st.q, onQ: e => this.setState({ q: e.target.value }),
+      cols: isT ? 'minmax(90px,.7fr) minmax(0,1.4fr) minmax(0,1.2fr) minmax(110px,.8fr) minmax(0,1fr)' : 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) minmax(120px,.9fr) 0px',
+      heads: isT ? ['Plate', 'Model', 'Capacity', 'Status', 'Usual driver'] : ['Name', 'Phone', 'Usual truck', 'App', ''],
+      rows, noRows: rows.length === 0, emptyText: q ? 'Nothing matches that search.' : (isT ? 'No trucks yet. Add the first one with the form.' : 'No drivers yet. Add the first one with the form.'),
+      massUnit: 'kg',
+      fieldsTitle: isT ? 'Why these fields' : 'Why these fields',
+      fieldsNotes: isT ? [
+        'Plate is the only required field and matches POST /trucks. Duplicates come back as 409 and are shown word for word.',
+        'Model is optional in the API and helps dispatchers tell vans from rigids at a glance.',
+        'Payload and pallet spaces let the assign panel rule out trucks too small for a load. They need two new fields on /trucks; the mass unit comes from operator settings.',
+        '"Starts as" avoids a new truck showing as Available before it has passed its checks.',
+      ] : [
+        'Name and phone are required and match POST /drivers. A phone already on file comes back as 409.',
+        'Phone is stored in international format so dispatch can call from anywhere.',
+        'Usual truck pre-fills the assign panel. It needs a driver–truck link, which the API doesn\'t have yet.',
+        'The app link replaces a password. Sign-in beyond a demo session is out of scope for now.',
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

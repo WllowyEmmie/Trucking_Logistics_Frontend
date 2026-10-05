@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="dispatch-tokens.css">
+<script src="./doc-page.js"></script>
+<style>doc-page:not(:defined){visibility:hidden} body{margin:0;font-family:var(--font-sans);color:var(--ink)} a{color:var(--status-assigned)} a:hover{color:var(--ink)} tr{break-inside:avoid}</style>
+</helmet>
+<doc-page margin="0.6in" orientation="landscape">
+  <span slot="footer" style="font-size:9pt;color:var(--ink-muted)">Dispatch · status reference · one pill system across customer, driver and console</span>
+  <h1 style="font-size:24pt;line-height:1.15;margin:0 0 4pt;font-weight:700">Delivery and truck states</h1>
+  <p style="font-size:12pt;line-height:1.4;margin:0 0 14pt;color:var(--ink-annotation)">What each state means and what each surface shows. Every pill carries its text label; a filled dot marks a live or finished state, a hollow dot marks waiting or inactive.</p>
+
+  <h2 style="font-size:15pt;margin:0 0 6pt">Delivery</h2>
+  <table style="width:100%;border-collapse:collapse;font-size:11pt;line-height:1.35">
+    <thead><tr style="text-align:start;border-bottom:1.5pt solid var(--ink)">
+      <th style="text-align:start;padding:5pt 8pt 5pt 0;width:13%">State</th><th style="text-align:start;padding:5pt 8pt;width:20%">Means</th><th style="text-align:start;padding:5pt 8pt;width:23%">Customer page</th><th style="text-align:start;padding:5pt 8pt;width:20%">Driver app</th><th style="text-align:start;padding:5pt 8pt;width:24%">Console</th>
+    </tr></thead>
+    <tbody>
+      <tr style="border-bottom:0.75pt solid var(--divider)"><td style="padding:6pt 8pt 6pt 0;vertical-align:top"><dc-import name="StatusPill" status="pending" size="sm" hint-size="80px,22px"></dc-import></td><td style="padding:6pt 8pt;vertical-align:top">Created, no truck yet.</td><td style="padding:6pt 8pt;vertical-align:top">"Waiting for a truck". Pins only, no marker, no ETA; requested window instead.</td><td style="padding:6pt 8pt;vertical-align:top">Not visible.</td><td style="padding:6pt 8pt;vertical-align:top">Top of the list, oldest first. Exception after 2 h if a truck is free.</td></tr>
+      <tr style="border-bottom:0.75pt solid var(--divider)"><td style="padding:6pt 8pt 6pt 0;vertical-align:top"><dc-import name="StatusPill" status="assigned" size="sm" hint-size="80px,22px"></dc-import></td><td style="padding:6pt 8pt;vertical-align:top">Truck chosen, not started.</td><td style="padding:6pt 8pt;vertical-align:top">Truck at depot; ETA shown as a window.</td><td style="padding:6pt 8pt;vertical-align:top">Appears on Today; stop 1 is current.</td><td style="padding:6pt 8pt;vertical-align:top">Dashed line from truck to pickup.</td></tr>
+      <tr style="border-bottom:0.75pt solid var(--divider)"><td style="padding:6pt 8pt 6pt 0;vertical-align:top"><dc-import name="StatusPill" status="in_transit" size="sm" hint-size="80px,22px"></dc-import></td><td style="padding:6pt 8pt;vertical-align:top">Collected, stops under way.</td><td style="padding:6pt 8pt;vertical-align:top">Live marker, single ETA, distance in operator units.</td><td style="padding:6pt 8pt;vertical-align:top">Current stop tinted; hold to confirm arrived, then completed.</td><td style="padding:6pt 8pt;vertical-align:top">Route lit on selection; "Late N min" when 10+ min past the promised time.</td></tr>
+      <tr style="border-bottom:0.75pt solid var(--divider)"><td style="padding:6pt 8pt 6pt 0;vertical-align:top"><dc-import name="StatusPill" status="completed" size="sm" hint-size="80px,22px"></dc-import></td><td style="padding:6pt 8pt;vertical-align:top">All stops done.</td><td style="padding:6pt 8pt;vertical-align:top">"Delivered at", signed-for name; marker removed.</td><td style="padding:6pt 8pt;vertical-align:top">Proof of delivery, then "Delivery done".</td><td style="padding:6pt 8pt;vertical-align:top">Under Completed; truck returns to Available.</td></tr>
+      <tr style="border-bottom:0.75pt solid var(--divider)"><td style="padding:6pt 8pt 6pt 0;vertical-align:top"><dc-import name="StatusPill" status="cancelled" size="sm" hint-size="80px,22px"></dc-import></td><td style="padding:6pt 8pt;vertical-align:top">Stopped by the operator.</td><td style="padding:6pt 8pt;vertical-align:top">Who and when; map dimmed; link won't update again.</td><td style="padding:6pt 8pt;vertical-align:top">Removed from Today.</td><td style="padding:6pt 8pt;vertical-align:top">Under Cancelled with reason in events.</td></tr>
+      <tr style="border-bottom:0.75pt solid var(--divider)"><td style="padding:6pt 8pt 6pt 0;vertical-align:top"><dc-import name="StatusPill" status="failed" size="sm" hint-size="80px,22px"></dc-import></td><td style="padding:6pt 8pt;vertical-align:top">Could not complete. Reason from a fixed list.</td><td style="padding:6pt 8pt;vertical-align:top">Reason in plain words, then what happens next and who calls whom.</td><td style="padding:6pt 8pt;vertical-align:top">Sent from Report a problem.</td><td style="padding:6pt 8pt;vertical-align:top">Exception row for one hour.</td></tr>
+      <tr><td style="padding:6pt 8pt 6pt 0;vertical-align:top;font-weight:700">Stale position</td><td style="padding:6pt 8pt;vertical-align:top">In transit, no ping for 20+ min. Not a status.</td><td style="padding:6pt 8pt;vertical-align:top">Hollow grey dashed marker, "Last seen HH:MM"; ETA called "Last estimate".</td><td style="padding:6pt 8pt;vertical-align:top">"Location paused" notice once, after unlock.</td><td style="padding:6pt 8pt;vertical-align:top">"Truck silent" exception; marker labelled with age.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 style="font-size:15pt;margin:18pt 0 6pt">Truck</h2>
+  <table style="width:100%;border-collapse:collapse;font-size:11pt;line-height:1.35">
+    <thead><tr style="border-bottom:1.5pt solid var(--ink)"><th style="text-align:start;padding:5pt 8pt 5pt 0;width:13%">State</th><th style="text-align:start;padding:5pt 8pt;width:30%">Means</th><th style="text-align:start;padding:5pt 8pt;width:27%">On the map</th><th style="text-align:start;padding:5pt 8pt;width:30%">In the console list</th></tr></thead>
+    <tbody>
+      <tr style="border-bottom:0.75pt solid var(--divider)"><td style="padding:6pt 8pt 6pt 0"><dc-import name="StatusPill" status="available" size="sm" hint-size="80px,22px"></dc-import></td><td style="padding:6pt 8pt">Free to assign.</td><td style="padding:6pt 8pt">White marker, solid amber ring.</td><td style="padding:6pt 8pt">Free since, distance from depot.</td></tr>
+      <tr style="border-bottom:0.75pt solid var(--divider)"><td style="padding:6pt 8pt 6pt 0"><dc-import name="StatusPill" status="on_delivery" size="sm" hint-size="80px,22px"></dc-import></td><td style="padding:6pt 8pt">Has an assigned or in-transit delivery.</td><td style="padding:6pt 8pt">Filled amber marker, glides between pings.</td><td style="padding:6pt 8pt">Delivery ref, seconds since last ping.</td></tr>
+      <tr style="border-bottom:0.75pt solid var(--divider)"><td style="padding:6pt 8pt 6pt 0"><dc-import name="StatusPill" status="maintenance" size="sm" hint-size="80px,22px"></dc-import></td><td style="padding:6pt 8pt">Out of service.</td><td style="padding:6pt 8pt">Not shown.</td><td style="padding:6pt 8pt">"In workshop until HH:MM".</td></tr>
+      <tr><td style="padding:6pt 8pt 6pt 0"><dc-import name="StatusPill" status="offline" size="sm" hint-size="80px,22px"></dc-import></td><td style="padding:6pt 8pt">Not reporting today.</td><td style="padding:6pt 8pt">Not shown: position is null, never 0,0.</td><td style="padding:6pt 8pt">"No position reported today".</td></tr>
+    </tbody>
+  </table>
+</doc-page>
+</x-dc>
+</body>
+</html>
