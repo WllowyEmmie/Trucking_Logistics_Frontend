@@ -1,17 +1,7 @@
 // Maps GET /track/{token} to one of eight view states and everything both layouts show.
-import type { MapRoute, MapStop, MapTruck, LatLng } from '@/components/map/types';
-import {
-  describeOffset,
-  formatAgo,
-  formatDate,
-  formatDistance,
-  formatTime,
-  formatWhen,
-  haversineKm,
-  minutesSince,
-  tzAbbr,
-  zonesDiffer,
-} from '@/lib/format';
+import type { LatLng, MapRoute, MapStop, MapTruck } from '@/components/map/types';
+import { customerEventText, eventAt, failReasonOf, hasLatLng } from '@/lib/deliveries';
+import { describeOffset, formatAgo, formatDate, formatDistance, formatTime, formatWhen, haversineKm, minutesSince, tzAbbr, zonesDiffer } from '@/lib/format';
 import type { DeliveryStatus, FailReason, TrackResponse, TrackStop } from '@/lib/types';
 
 export type TrackViewState = DeliveryStatus | 'stale' | 'not_found';
@@ -89,36 +79,50 @@ export const NOT_FOUND_VIEW: TrackingView = {
   map: null,
 };
 
-const countWord = (n: number) => (n === 1 ? 'one' : n === 2 ? 'two' : n === 3 ? 'three' : String(n));
+const stopDone = (s: TrackStop) => s.status === 'completed' || s.status === 'skipped';
 
-export function buildTrackingView(
-  d: TrackResponse,
-  opts: { now: number; viewerTz: string; staleMinutes: number; checkedAt: number; units: 'km' | 'mi' },
-): TrackingView {
+export interface TrackingOpts {
+  now: number;
+  viewerTz: string;
+  staleMinutes: number;
+  checkedAt: number;
+  units: 'metric' | 'imperial';
+  /** The API's /track has no operator block: these come from config. */
+  operator: string;
+  phone: string | null;
+  operatorTz: string;
+}
+
+export function buildTrackingView(d: TrackResponse, opts: TrackingOpts): TrackingView {
   const { now, viewerTz } = opts;
-  const op = d.operator.name;
+  const op = opts.operator;
   const t = (iso: string) => formatTime(iso, viewerTz);
-  const mine = d.stops.find((s) => s.mine) ?? d.stops[d.stops.length - 1]!;
-  const firstPending = d.stops.find((s) => s.status === 'pending');
-  const truckPos: LatLng | null = d.truck?.lat != null && d.truck.lng != null ? { lat: d.truck.lat, lng: d.truck.lng } : null;
+  const drops = d.stops.filter((s) => s.stop_type === 'dropoff');
+  // Privacy: the response doesn't say which stop belongs to this link (TODO(track-privacy)).
+  // With one drop-off it can only be the viewer's; with several, no drop-off address or pin is shown.
+  const multi = drops.length > 1;
+  const mine = multi ? null : (drops[0] ?? null);
+  const pickup = d.stops.find((s) => s.stop_type === 'pickup');
+  const truckPos: LatLng | null = d.truck_lat != null && d.truck_lng != null ? { lat: d.truck_lat, lng: d.truck_lng } : null;
   const live = d.status === 'in_transit' || d.status === 'assigned';
-  const seenMin = d.truck?.last_seen_at ? minutesSince(d.truck.last_seen_at, now) : null;
+  const seenMin = d.truck_seen_at ? minutesSince(d.truck_seen_at, now) : null;
   const stale = d.status === 'in_transit' && seenMin != null && seenMin >= opts.staleMinutes;
   const state: TrackViewState = stale ? 'stale' : d.status;
-  const plate = d.truck?.plate ?? null;
-  const pickup = d.stops.find((s) => s.kind === 'pickup');
-  const fromDepot = !!pickup?.address?.startsWith(op);
+  // The plate is only in the note of the `assigned` event ("assigned to KF-12").
+  const assignedNote = [...d.events].reverse().find((e) => e.event_type === 'assigned')?.note ?? null;
+  const plate = assignedNote ? assignedNote.replace(/^assigned to /i, '') : null;
 
-  const diffZone = zonesDiffer(viewerTz, d.operator.timezone, new Date(now));
+  const diffZone = zonesDiffer(viewerTz, opts.operatorTz, new Date(now));
   const viewerAbbr = tzAbbr(viewerTz, new Date(now));
   const tzNote = diffZone
-    ? `Times are in your time zone (${viewerAbbr}). ${op} works in ${tzAbbr(d.operator.timezone, new Date(now))}, ${describeOffset(viewerTz, d.operator.timezone, new Date(now))}.`
+    ? `Times are in your time zone (${viewerAbbr}). ${op} works in ${tzAbbr(opts.operatorTz, new Date(now))}, ${describeOffset(viewerTz, opts.operatorTz, new Date(now))}.`
     : `Times are in your time zone (${viewerAbbr}).`;
 
-  const distKm = truckPos ? haversineKm(truckPos, mine) : null;
-  const goods = d.goods ? [{ k: 'Goods', v: d.goods }] : [];
-  const booked = { k: 'Booked', v: formatWhen(d.booked_at, viewerTz, undefined, new Date(now)) };
-  const window = (s: TrackStop) => (s.window_start && s.window_end ? `${t(s.window_start)} – ${t(s.window_end)}` : null);
+  const distKm = truckPos && mine && hasLatLng(mine) ? haversineKm(truckPos, mine) : null;
+  const goods = d.goods_desc ? [{ k: 'Goods', v: d.goods_desc }] : [];
+  const booked = { k: 'Booked', v: formatWhen(d.created_at, viewerTz, undefined, new Date(now)) };
+  const truckFact = { k: 'Truck', v: plate ?? 'Assigned' };
+  const distEta = (label: string) => (distKm != null ? { label, value: formatDistance(distKm, opts.units), detail: 'Straight-line distance from the truck', hasTime: false } : null);
 
   let headline = '';
   let sub = '';
@@ -128,123 +132,124 @@ export function buildTrackingView(
   let facts: TrackingView['facts'] = [];
   let note: string | null = null;
 
-  const otherDone = d.stops.filter((s) => s.kind === 'dropoff' && !s.mine && s.status === 'done').length;
-  const before = firstPending ? d.stops.filter((s) => s.status === 'pending' && s.seq < mine.seq).length : 0;
-  const progressSub =
-    before === 0
-      ? otherDone === 0
-        ? 'The truck has your goods and is heading to you next.'
-        : `The truck has made ${countWord(otherDone)} other drop-off${otherDone === 1 ? '' : 's'} and is heading to you next.`
-      : `The truck has ${countWord(before)} other stop${before === 1 ? '' : 's'} before yours.`;
+  const doneDrops = drops.filter(stopDone).length;
+  const progressSub = multi
+    ? `The truck is on its way. ${doneDrops} of ${drops.length} drop-offs done so far.`
+    : 'The truck has your goods and is heading to you.';
 
   switch (state) {
     case 'in_transit': {
-      headline = 'On the way to you';
-      sub = progressSub;
-      updated = `Updated ${d.truck?.last_seen_at ? formatAgo(d.truck.last_seen_at, now) : formatAgo(new Date(opts.checkedAt).toISOString(), now)} · refreshes on its own`;
-      if (mine.eta) eta = { label: 'Estimated arrival', value: t(mine.eta), detail: distKm != null ? `${formatDistance(distKm, opts.units)} away` : '', hasTime: true };
-      facts = [...goods, { k: 'Truck', v: plate ?? '—' }, ...(distKm != null ? [{ k: 'Distance to your stop', v: formatDistance(distKm, opts.units) }] : []), booked];
+      const here = mine?.status === 'arrived';
+      headline = here ? 'The truck has arrived' : 'On the way to you';
+      sub = here ? `Arrived at ${t(mine!.arrived_at!)}. The driver is unloading.` : progressSub;
+      updated = `Updated ${d.truck_seen_at ? formatAgo(d.truck_seen_at, now) : formatAgo(new Date(opts.checkedAt).toISOString(), now)} · refreshes on its own`;
+      // TODO(eta-api): no ETA in the API; distance is the best signal there is.
+      if (!here) eta = distEta('Distance to your drop-off');
+      facts = [...goods, truckFact, booked];
       break;
     }
     case 'stale': {
-      const seen = d.truck!.last_seen_at!;
-      const near = truckPos
-        ? d.stops.find((s) => s.status === 'done' && haversineKm(truckPos, s) < 1.5)
-        : undefined;
+      const seen = d.truck_seen_at!;
       headline = 'On the way to you';
       sub = progressSub;
       updated = `Last position ${seenMin} min ago`;
       notice = {
         tone: 'stale',
         title: `Truck position is ${seenMin} minutes old`,
-        body: `The driver's phone last reported at ${t(seen)}${near ? (near.kind === 'pickup' ? ', near the pickup' : ', near the previous drop-off') : ''}. The delivery is still in progress. The map shows that last known position, not where the truck is now.`,
+        body: `The driver's phone last reported at ${t(seen)}. The delivery is still in progress. The map shows that last known position, not where the truck is now.`,
       };
-      if (mine.eta) eta = { label: 'Last estimate', value: t(mine.eta), detail: `Calculated at ${t(seen)} — may be out of date`, hasTime: true };
-      facts = [...goods, { k: 'Truck', v: plate ?? '—' }, { k: 'Last known position', v: near ? `Near stop ${near.seq}, at ${t(seen)}` : `At ${t(seen)}` }, booked];
+      eta = distEta('Distance at last position');
+      facts = [...goods, truckFact, { k: 'Last known position', v: `At ${t(seen)}` }, booked];
       note = `Position not updated since ${t(seen)}`;
       break;
     }
     case 'pending': {
       headline = 'Waiting for a truck';
-      sub = `${op} has your booking. No truck has been assigned yet, so there is no position or arrival time to show. This page updates on its own when one is.`;
+      sub = `${op} has your booking. No truck has been assigned yet, so there is no position to show. This page updates on its own when one is.`;
       updated = `Checked ${formatAgo(new Date(opts.checkedAt).toISOString(), now)}`;
-      const w = window(mine);
-      if (w && mine.window_start) {
-        const today = formatDate(mine.window_start, viewerTz) === formatDate(new Date(now), viewerTz);
-        eta = { label: `Requested window, ${today ? 'today' : formatDate(mine.window_start, viewerTz)}`, value: w, detail: 'An arrival time appears once a truck is assigned', hasTime: true };
-      }
       facts = [...goods, { k: 'Truck', v: 'Not assigned yet' }, booked];
       note = 'No truck assigned yet — nothing to track';
       break;
     }
     case 'assigned': {
       headline = 'Truck assigned';
-      sub = `Truck ${plate} will collect your goods${fromDepot ? ' from the depot' : ''}. It hasn't set off yet.`;
+      sub = `${plate ? `Truck ${plate}` : 'A truck'} will collect your goods. It hasn't set off yet.`;
       updated = `Updated ${formatAgo(new Date(opts.checkedAt).toISOString(), now)} · refreshes on its own`;
-      const w = window(mine);
-      if (w) eta = { label: 'Estimated arrival window', value: w, detail: 'Narrows to a single time once the truck sets off', hasTime: true };
-      facts = [...goods, { k: 'Truck', v: plate ?? '—' }, ...(distKm != null ? [{ k: 'Distance to your stop', v: `${formatDistance(distKm, opts.units)}${fromDepot ? ' from the depot' : ''}` }] : []), booked];
+      facts = [...goods, truckFact, ...(distKm != null ? [{ k: 'Distance to your drop-off', v: formatDistance(distKm, opts.units) }] : []), booked];
       break;
     }
     case 'completed': {
-      const at = mine.completed_at ?? d.ended_at;
+      const at = eventAt(d.events, 'completed');
       headline = 'Delivered';
-      sub = 'Delivered to your drop-off. Live tracking has ended.';
-      if (at) eta = { label: 'Delivered at', value: t(at), detail: d.signed_by ? `Signed for by ${d.signed_by}` : '', hasTime: true };
-      facts = [...goods, ...(plate ? [{ k: 'Truck', v: plate }] : []), booked];
+      sub = 'Your delivery is complete. Live tracking has ended.';
+      if (at) eta = { label: 'Delivered at', value: t(at), detail: '', hasTime: true };
+      facts = [...goods, ...(plate ? [truckFact] : []), booked];
       note = 'Tracking ended';
       break;
     }
     case 'failed': {
-      const at = mine.completed_at ?? d.ended_at;
+      const at = eventAt(d.events, 'failed');
       headline = 'Delivery not completed';
-      sub = at ? `The driver couldn't deliver your goods at ${t(at)}.` : "The driver couldn't deliver your goods.";
-      notice = { tone: 'failed', title: FAIL_TITLE[d.failure_reason ?? 'other'], body: d.failure_detail ?? '', next: d.failure_next };
-      facts = [...goods, ...(plate ? [{ k: 'Truck', v: plate }] : []), booked];
-      note = 'Tracking ended — goods returning to depot';
+      sub = at ? `The driver couldn't complete the delivery at ${t(at)}.` : "The driver couldn't complete the delivery.";
+      notice = {
+        tone: 'failed',
+        title: FAIL_TITLE[failReasonOf(d.events) ?? 'other'],
+        body: `${op} will be in touch about what happens next.`,
+        next: opts.phone ? `You can also call ${op} on ${opts.phone}.` : null,
+      };
+      facts = [...goods, ...(plate ? [truckFact] : []), booked];
+      note = 'Tracking ended';
       break;
     }
     case 'cancelled': {
-      const at = d.ended_at;
+      const at = eventAt(d.events, 'cancelled');
       headline = 'Delivery cancelled';
       sub = at
-        ? `${d.cancelled_by ?? op} cancelled this delivery on ${formatDate(at, viewerTz)} at ${t(at)}. Nothing is on its way on this link.`
+        ? `This delivery was cancelled on ${formatDate(at, viewerTz)} at ${t(at)}. Nothing is on its way on this link.`
         : 'This delivery was cancelled. Nothing is on its way on this link.';
-      notice = { tone: 'neutral', title: 'Still expecting these goods?', body: `Call ${op}. This page won't update again.` };
+      notice = { tone: 'neutral', title: 'Still expecting these goods?', body: `Contact ${op}. This page won't update again.` };
       facts = [...goods, booked];
       note = 'Cancelled — no truck on the way';
       break;
     }
   }
 
+  const firstOpen = d.stops.find((s) => !stopDone(s));
   const stops: TimelineStop[] = d.stops.map((s) => {
+    const isPickup = s.stop_type === 'pickup';
+    const hidden = !isPickup && multi;
     let dot: StopDot;
     if (d.status === 'cancelled') dot = 'cancelled';
-    else if (s.status === 'done') dot = 'done';
-    else if (s.status === 'failed') dot = 'failed';
-    else if (live && s === firstPending) dot = 'next';
+    else if (s.status === 'completed') dot = 'done';
+    else if (live && s === firstOpen) dot = 'next';
     else dot = 'todo';
     let time = '';
-    if (dot === 'done' && s.completed_at) time = `${s.kind === 'pickup' ? 'Collected' : 'Delivered'} ${t(s.completed_at)}`;
-    else if (dot === 'failed' && s.completed_at) time = `Not delivered ${t(s.completed_at)}`;
-    else if (dot === 'cancelled') time = s.kind === 'pickup' || s.mine ? 'Cancelled' : '';
-    else if (d.status === 'pending' && s.kind === 'pickup') time = 'Waiting for a truck';
-    else if (d.status === 'in_transit' && s.eta && (s.mine || s.kind === 'pickup')) time = `Expected ${t(s.eta)}`;
-    else if (s.mine && window(s)) time = `Window ${window(s)}`;
+    if (s.status === 'completed') time = `${isPickup ? 'Collected' : 'Delivered'}${s.arrived_at ? ` · arrived ${t(s.arrived_at)}` : ''}`;
+    else if (s.status === 'skipped') time = 'Skipped';
+    else if (s.status === 'arrived' && s.arrived_at) time = `Truck arrived ${t(s.arrived_at)}`;
+    else if (dot === 'cancelled') time = 'Cancelled';
+    else if (d.status === 'pending' && isPickup) time = 'Waiting for a truck';
     return {
-      key: s.seq,
+      key: s.sequence,
       dot,
-      label: `Stop ${s.seq} · ${s.kind === 'pickup' ? 'Pickup' : s.mine ? 'Your drop-off' : 'Drop-off'}`,
-      main: s.address ?? "Another customer's drop-off",
+      label: `Stop ${s.sequence} · ${isPickup ? 'Pickup' : s === mine ? 'Your drop-off' : 'Drop-off'}`,
+      main: hidden ? 'A drop-off on this delivery' : s.address,
       time,
-      mine: s.mine,
-      other: s.address == null,
+      mine: s === mine,
+      other: hidden,
     };
   });
 
-  const history = d.events.map((e, i) => ({ key: `${e.at}-${i}`, t: formatWhen(e.at, viewerTz, undefined, new Date(now)), text: e.text }));
+  // Events come oldest first; the page shows newest first. Internal ones (stop arrivals) are skipped.
+  const history = [...d.events]
+    .reverse()
+    .flatMap((e, i) => {
+      const text = customerEventText(e);
+      return text ? [{ key: `${e.created_at}-${i}`, t: formatWhen(e.created_at, viewerTz, undefined, new Date(now)), text }] : [];
+    });
 
-  // Map
+  // Map: pickup, the viewer's drop-off when it's known, and the truck while it's live.
+  const shown = d.stops.filter((s) => (s.stop_type === 'pickup' || !multi) && hasLatLng(s)) as (TrackStop & LatLng)[];
   const showTruck = live && truckPos != null;
   const trucks: MapTruck[] = showTruck
     ? [
@@ -253,27 +258,22 @@ export function buildTrackingView(
           ...truckPos!,
           state: stale ? 'stale' : 'live',
           size: 'md',
-          label: stale
-            ? `Last seen ${t(d.truck!.last_seen_at!)}`
-            : d.status === 'assigned' && pickup && haversineKm(truckPos!, pickup) < 1
-              ? `${plate} · at depot`
-              : plate,
-          aria: stale ? `Truck ${plate}, last seen ${t(d.truck!.last_seen_at!)}` : `Truck ${plate}`,
+          label: stale ? `Last seen ${t(d.truck_seen_at!)}` : plate,
+          aria: stale ? `Truck ${plate ?? ''}, last seen ${t(d.truck_seen_at!)}` : `Truck ${plate ?? ''}`,
         },
       ]
     : [];
-  const mapStops: MapStop[] = d.stops.map((s) => ({
-    id: String(s.seq),
-    n: s.seq,
-    kind: s.kind,
+  const mapStops: MapStop[] = shown.map((s) => ({
+    id: String(s.sequence),
+    n: s.sequence,
+    kind: s.stop_type,
     lat: s.lat,
     lng: s.lng,
-    done: s.status === 'done',
-    small: s.kind === 'dropoff' && !s.mine,
-    label: s.mine ? 'Your drop-off' : null,
+    done: s.status === 'completed',
+    label: s === mine ? 'Your drop-off' : null,
   }));
-  const done = d.stops.filter((s) => s.status === 'done');
-  const rest = d.stops.filter((s) => s.status !== 'done');
+  const done = shown.filter(stopDone);
+  const rest = shown.filter((s) => !stopDone(s));
   const head: LatLng[] = showTruck && d.status === 'in_transit' ? [truckPos!] : done.length ? [done[done.length - 1]!] : [];
   const route: MapRoute = {
     travelled: showTruck && d.status === 'in_transit' ? [...done, truckPos!] : done,
@@ -283,8 +283,8 @@ export function buildTrackingView(
   return {
     state,
     operator: op,
-    phone: d.operator.phone,
-    ref: d.ref,
+    phone: opts.phone,
+    ref: d.reference,
     pill: d.status,
     headline,
     sub,
@@ -303,7 +303,7 @@ export function buildTrackingView(
       route,
       note,
       dim: d.status === 'cancelled',
-      fit: [...d.stops, ...(showTruck ? [truckPos!] : [])],
+      fit: [...shown, ...(showTruck ? [truckPos!] : [])],
     },
   };
 }

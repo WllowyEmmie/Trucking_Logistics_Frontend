@@ -13,7 +13,7 @@ import { StatusPill } from '@/components/StatusPill';
 // Current stop: arrive → complete by press-and-hold. The last drop-off asks who received it.
 export default function StopPage() {
   const router = useRouter();
-  const { delivery, stop, index, isCurrent, total, stops, current, time, arrive, completeStop, completeDelivery, loading } = useStop();
+  const { delivery, detail, stop, index, isCurrent, total, stops, current, time, arrive, completeStop, completeDelivery, loading } = useStop();
   const [podName, setPodName] = useState('');
   const [photo, setPhoto] = useState<File | null>(null);
 
@@ -180,16 +180,15 @@ export default function StopPage() {
         </>
       ) : (
         <>
-          {stop.contact_name && (
+          {/* TODO(stop-contacts): per-stop contact and notes are stored on create but not returned yet. */}
+          <div className="flex flex-col gap-1">
+            <span className="t-label text-ink-muted">Delivery for</span>
+            <span className="t-driver-meta font-bold">{delivery.customer_name}</span>
+          </div>
+          {detail?.delivery.goods_desc && (
             <div className="flex flex-col gap-1">
-              <span className="t-label text-ink-muted">{pickup ? 'Collect from' : 'Deliver to'}</span>
-              <span className="t-driver-meta font-bold">{stop.contact_name}</span>
-            </div>
-          )}
-          {stop.notes && (
-            <div className="flex flex-col gap-1">
-              <span className="t-label text-ink-muted">From dispatch</span>
-              <span className="t-driver-meta">{stop.notes}</span>
+              <span className="t-label text-ink-muted">Goods</span>
+              <span className="t-driver-meta">{detail.delivery.goods_desc}</span>
             </div>
           )}
           <div className="grid grid-cols-2 gap-4">

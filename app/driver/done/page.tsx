@@ -8,12 +8,16 @@ import { useDriver } from '@/components/driver/DriverProvider';
 import { DriverScreen } from '@/components/driver/DriverScreen';
 import { navHref, primaryCls, primaryStyle } from '@/components/driver/ui';
 import { StatusPill } from '@/components/StatusPill';
+import { endedAt, eventAt, failReasonOf, useDeliveryDetail } from '@/lib/deliveries';
 import { FAIL_REASONS } from '@/lib/labels';
 
 // Delivery done: a plain summary, then one action. A new assignment replaces this screen.
 export default function DonePage() {
   const router = useRouter();
-  const { active, ended, progressFor, time, loading } = useDriver();
+  const { active, ended, progressFor, localStatusAt, time, loading } = useDriver();
+  // Stops and times are only in the delivery's detail. While the final action is still queued,
+  // the server hasn't recorded the end yet, so this phone's own times fill in.
+  const detail = useDeliveryDetail(ended?.id ?? null, false).data;
 
   useEffect(() => {
     if (active) router.replace('/driver');
@@ -35,15 +39,19 @@ export default function DonePage() {
 
   const p = progressFor(ended.id);
   const failed = ended.status === 'failed';
-  const drops = ended.stops.filter((s) => s.kind === 'dropoff');
-  const delivered = failed ? drops.filter((s) => s.status === 'done' || p.done[s.seq]).length : drops.length;
-  const reason = ended.failure_reason ?? p.failReason ?? null;
-  const depot = ended.stops[0];
-  const rows: [string, string][] = [
-    ['Stops delivered', `${delivered} of ${drops.length}`],
-    ['Problems reported', reason ? (FAIL_REASONS.find((r) => r.key === reason)?.label ?? 'Other') : 'None'],
-  ];
-  if (ended.started_at) rows.push(['Started', time(ended.started_at)]);
+  const events = detail?.events ?? [];
+  const stops = detail?.stops ?? [];
+  const drops = stops.filter((s) => s.stop_type === 'dropoff');
+  const delivered = drops.filter((s) => s.status === 'completed' || p.done[s.sequence]).length;
+  const reason = failReasonOf(events) ?? p.failReason ?? null;
+  const started = eventAt(events, 'in_transit');
+  const finished = endedAt(events) ?? localStatusAt(ended.id);
+  const depot = stops[0];
+
+  const rows: [string, string][] = [];
+  if (detail) rows.push(['Stops delivered', `${failed ? delivered : drops.length} of ${drops.length}`]);
+  rows.push(['Problems reported', reason ? (FAIL_REASONS.find((r) => r.key === reason)?.label ?? 'Other') : 'None']);
+  if (started) rows.push(['Started', time(started)]);
   if (p.podName) rows.push(['Signed for by', p.podName]);
 
   return (
@@ -64,8 +72,8 @@ export default function DonePage() {
         </div>
         <h1 className="t-display m-0">{failed ? 'Delivery stopped' : 'Delivery done'}</h1>
         <span className="t-driver-meta">
-          {ended.id}
-          {ended.ended_at ? ` · finished ${time(ended.ended_at)}` : ''}
+          {ended.reference}
+          {finished ? ` · finished ${time(finished)}` : ''}
         </span>
         <dl className="m-0 grid gap-x-4 gap-y-3 border-y border-divider py-4" style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}>
           {rows.map(([k, v]) => (

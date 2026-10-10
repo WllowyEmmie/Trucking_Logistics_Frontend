@@ -39,8 +39,11 @@ export default function TrackingPage() {
       staleMinutes: config.stale_minutes,
       checkedAt: q.dataUpdatedAt,
       units: config.units,
+      operator: config.operator_name,
+      phone: config.support_phone || null,
+      operatorTz: config.timezone,
     });
-  }, [q.data, q.error, q.dataUpdatedAt, now, config.stale_minutes, config.units]);
+  }, [q.data, q.error, q.dataUpdatedAt, now, config]);
 
   if (!view) {
     if (q.isError) {

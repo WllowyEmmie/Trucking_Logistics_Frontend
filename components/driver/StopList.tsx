@@ -3,7 +3,7 @@
 import { Check } from 'lucide-react';
 import Link from 'next/link';
 import { formatDistance, haversineKm } from '@/lib/format';
-import type { Config } from '@/lib/types';
+import type { AppConfig } from '@/lib/config';
 import type { DriverStop } from './DriverProvider';
 
 const kindLabel = (k: DriverStop['kind']) => (k === 'pickup' ? 'Pickup' : 'Drop-off');
@@ -11,7 +11,7 @@ const kindLabel = (k: DriverStop['kind']) => (k === 'pickup' ? 'Pickup' : 'Drop-
 interface Props {
   stops: DriverStop[];
   current: number;
-  config: Config;
+  config: AppConfig;
   pos: { lat: number; lng: number } | null;
   time: (iso: string) => string;
 }
@@ -38,8 +38,7 @@ export function StopList({ stops, current, config, pos, time }: Props) {
           );
         }
         if (i === current) {
-          const dist = pos ? formatDistance(haversineKm(pos, s), config.units, config.locale) : null;
-          const meta = [s.contact_name, dist].filter(Boolean).join(' · ');
+          const meta = pos && s.lat != null && s.lng != null ? `${formatDistance(haversineKm(pos, { lat: s.lat, lng: s.lng }), config.units, config.locale)} away` : null;
           return (
             <li key={s.seq}>
               <Link

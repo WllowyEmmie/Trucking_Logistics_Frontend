@@ -4,14 +4,16 @@ import { ArrowLeft, Phone } from 'lucide-react';
 import Link from 'next/link';
 import { DriverScreen } from '@/components/driver/DriverScreen';
 import { primaryCls, primaryStyle, rowCls, smsHref, telHref, topBtnCls } from '@/components/driver/ui';
-import { splitContact, useStop } from '@/components/driver/useStop';
+import { useStop } from '@/components/driver/useStop';
 
 /** Fixed list: no typing while driving. */
 const MESSAGES = ['On my way — about 10 minutes', "I've arrived at the gate", "I can't find the entrance", 'Running late — new time on the tracking link'];
 
 // Contact client: calling is the one primary action; quick messages are one-tap SMS.
+// TODO(stop-contacts): stop contacts are stored on create but not returned, so this uses the
+// delivery's customer phone for every drop-off.
 export default function ContactPage() {
-  const { delivery, stop, config, time, progressFor, markMessage } = useStop();
+  const { delivery, detail, stop, config, time, progressFor, markMessage } = useStop();
 
   const back = stop && (
     <Link href={`/driver/stop/${stop.seq}`} className={`${topBtnCls} border-border`} style={{ color: 'var(--ink)' }}>
@@ -21,9 +23,11 @@ export default function ContactPage() {
   );
   if (!delivery || !stop) return <DriverScreen top={back}>{null}</DriverScreen>;
 
-  const [name, role] = splitContact(stop.contact_name);
-  const who = name ?? delivery.customer_name;
-  const phone = stop.contact_phone;
+  const pickup = stop.kind === 'pickup';
+  const who = delivery.customer_name;
+  // The customer phone is for drop-offs; at the pickup, dispatch is who to call.
+  const phone = pickup ? null : (detail?.delivery.customer_phone ?? null);
+  const dispatch = config.dispatch_phone || null;
   const sent = progressFor(delivery.id).msgs[stop.seq] ?? {};
 
   return (
@@ -35,20 +39,18 @@ export default function ContactPage() {
             <Phone size={24} strokeWidth={2.5} aria-hidden="true" />
             Call {who}
           </a>
-        ) : (
-          <a href={telHref(config.dispatch_phone)} role="button" className={primaryCls} style={primaryStyle}>
+        ) : dispatch ? (
+          <a href={telHref(dispatch)} role="button" className={primaryCls} style={primaryStyle}>
             <Phone size={24} strokeWidth={2.5} aria-hidden="true" />
             Call dispatch
           </a>
-        )
+        ) : undefined
       }
     >
       <div className="flex flex-col gap-1">
-        <span className="t-label text-ink-muted">{stop.kind === 'pickup' ? 'Collect from' : 'Deliver to'}</span>
+        <span className="t-label text-ink-muted">{pickup ? 'Pickup for' : 'Deliver to'}</span>
         <h1 className="t-display m-0">{who}</h1>
-        {/* Only the contact's role: delivery.customer_name is the booking customer, not necessarily this stop's. */}
-        {role && <span className="t-driver-meta">{role[0]!.toUpperCase() + role.slice(1)}</span>}
-        <span className="t-driver-meta text-ink-muted">{phone ?? 'No number on file. Call dispatch.'}</span>
+        <span className="t-driver-meta text-ink-muted">{phone ?? (pickup ? 'Call dispatch about the pickup.' : 'No number on file. Call dispatch.')}</span>
       </div>
 
       {phone && (
@@ -57,11 +59,7 @@ export default function ContactPage() {
           {MESSAGES.map((text, i) => {
             const at = sent[i];
             return at ? (
-              <div
-                key={text}
-                aria-disabled="true"
-                className={`${rowCls} border-status-completed bg-status-completed-bg text-ink`}
-              >
+              <div key={text} aria-disabled="true" className={`${rowCls} border-status-completed bg-status-completed-bg text-ink`}>
                 <span>{text}</span>
                 <span className="t-driver-meta flex-none text-status-completed">Sent {time(at)}</span>
               </div>
@@ -82,19 +80,15 @@ export default function ContactPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-2 border-t border-divider pt-3">
-        <span className="t-label text-ink-muted">No answer?</span>
-        {stop.alt_phone && (
-          <a href={telHref(stop.alt_phone)} role="button" className={`${rowCls} border-border`} style={{ color: 'var(--ink)' }}>
-            <span>Call site reception</span>
-            <span className="font-medium text-ink-muted">Alternative contact</span>
+      {phone && dispatch && (
+        <div className="flex flex-col gap-2 border-t border-divider pt-3">
+          <span className="t-label text-ink-muted">No answer?</span>
+          <a href={telHref(dispatch)} role="button" className={`${rowCls} border-border`} style={{ color: 'var(--ink)' }}>
+            <span>Call dispatch</span>
+            <span className="font-medium text-ink-muted">{config.operator_name}</span>
           </a>
-        )}
-        <a href={telHref(config.dispatch_phone)} role="button" className={`${rowCls} border-border`} style={{ color: 'var(--ink)' }}>
-          <span>Call dispatch</span>
-          <span className="font-medium text-ink-muted">{config.operator_name}</span>
-        </a>
-      </div>
+        </div>
+      )}
     </DriverScreen>
   );
 }

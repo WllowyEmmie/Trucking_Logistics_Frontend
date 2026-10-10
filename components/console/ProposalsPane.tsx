@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 import { formatTime } from '@/lib/format';
-import type { Config, Proposal } from '@/lib/types';
+import type { AppConfig } from '@/lib/config';
+import type { Proposal } from '@/lib/types';
 
 interface Props {
   proposals: Proposal[];
@@ -10,7 +11,7 @@ interface Props {
   note: string | null;
   lastCheck: string;
   busyId: string | null;
-  config: Config;
+  config: AppConfig;
   onToggle: () => void;
   onShow: (p: Proposal) => void;
   onApprove: (p: Proposal) => void;

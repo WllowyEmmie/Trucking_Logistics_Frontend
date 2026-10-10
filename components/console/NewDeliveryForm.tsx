@@ -2,37 +2,51 @@
 
 import { useMutation } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
-import { post } from '@/lib/api';
-import type { Delivery } from '@/lib/types';
+import { isConflict, post } from '@/lib/api';
+import { inServiceArea, type AppConfig } from '@/lib/config';
+import type { CreateDeliveryRequest, CreateDeliveryResponse } from '@/lib/types';
 import { inputCls, textareaCls } from './ui';
 
 interface Props {
-  defaultPickup: string;
-  onCreated: (d: Delivery) => void;
+  config: AppConfig;
+  onCreated: (r: CreateDeliveryResponse) => void;
   onCancel: () => void;
+}
+
+interface StopDraft {
+  address: string;
+  /** "53.6745, -1.5285": the API needs coordinates and does no geocoding. TODO(geocoding) */
+  coords: string;
+  contactName: string;
+  contactPhone: string;
 }
 
 type Errs = Record<string, string>;
 
-export function NewDeliveryForm({ defaultPickup, onCreated, onCancel }: Props) {
+const blank = (): StopDraft => ({ address: '', coords: '', contactName: '', contactPhone: '' });
+
+/** "53.6745, -1.5285" or "53.6745 -1.5285" → {lat, lng}. */
+function parseCoords(s: string): { lat: number; lng: number } | null {
+  const m = s.trim().match(/^(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  const lat = Number(m[1]);
+  const lng = Number(m[2]);
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
+}
+
+export function NewDeliveryForm({ config, onCreated, onCancel }: Props) {
+  const depot = config.depot;
   const [customer, setCustomer] = useState('');
   const [phone, setPhone] = useState('');
-  const [pickup, setPickup] = useState(defaultPickup);
-  const [drops, setDrops] = useState<string[]>(['']);
   const [goods, setGoods] = useState('');
+  const [pickup, setPickup] = useState<StopDraft>(() =>
+    depot ? { ...blank(), address: depot.address, coords: `${depot.lat}, ${depot.lng}` } : blank(),
+  );
+  const [drops, setDrops] = useState<StopDraft[]>([blank()]);
   const [errs, setErrs] = useState<Errs>({});
 
   const create = useMutation({
-    mutationFn: () =>
-      post<Delivery>('/deliveries', {
-        customer_name: customer.trim(),
-        customer_phone: phone.trim() || null,
-        goods: goods.trim() || null,
-        stops: [
-          { kind: 'pickup', address: pickup.trim() },
-          ...drops.map((address) => ({ kind: 'dropoff', address: address.trim() })),
-        ],
-      }),
+    mutationFn: (body: CreateDeliveryRequest) => post<CreateDeliveryResponse>('/deliveries', body),
     onSuccess: onCreated,
   });
 
@@ -40,12 +54,26 @@ export function NewDeliveryForm({ defaultPickup, onCreated, onCancel }: Props) {
     e.preventDefault();
     const next: Errs = {};
     if (!customer.trim()) next.customer = 'Enter the customer';
-    if (!pickup.trim()) next.pickup = 'Enter the pickup address';
-    drops.forEach((d, i) => {
-      if (!d.trim()) next['d' + i] = 'Enter an address or remove this stop';
+    const stops: CreateDeliveryRequest['stops'] = [];
+    [pickup, ...drops].forEach((s, i) => {
+      const k = i === 0 ? 'p' : `d${i - 1}`;
+      if (!s.address.trim()) next[`${k}-addr`] = i === 0 ? 'Enter the pickup address' : 'Enter an address or remove this stop';
+      const c = parseCoords(s.coords);
+      if (!c) next[`${k}-coords`] = 'Enter latitude, longitude — for example 53.6745, -1.5285';
+      else if (!inServiceArea(config, c)) next[`${k}-coords`] = "Outside the service area. Check that latitude and longitude aren't swapped.";
+      if (c)
+        stops.push({
+          stop_type: i === 0 ? 'pickup' : 'dropoff',
+          address: s.address.trim(),
+          lat: c.lat,
+          lng: c.lng,
+          contact_name: s.contactName.trim() || null,
+          contact_phone: s.contactPhone.trim() || null,
+        });
     });
     setErrs(next);
-    if (Object.keys(next).length === 0) create.mutate();
+    if (Object.keys(next).length) return;
+    create.mutate({ customer_name: customer.trim(), customer_phone: phone.trim() || null, goods_desc: goods.trim() || null, stops });
   }
 
   const err = (k: string) =>
@@ -54,6 +82,57 @@ export function NewDeliveryForm({ defaultPickup, onCreated, onCancel }: Props) {
         {errs[k]}
       </span>
     ) : null;
+  const described = (k: string) => (errs[k] ? `nd-${k}-err` : undefined);
+
+  function StopFields({ k, s, set, label, contact }: { k: string; s: StopDraft; set: (p: Partial<StopDraft>) => void; label: string; contact: boolean }) {
+    return (
+      <>
+        <label className="flex flex-col gap-1">
+          <span className="t-body-sm font-semibold">{label}</span>
+          <textarea
+            value={s.address}
+            onChange={(e) => set({ address: e.target.value })}
+            rows={2}
+            aria-invalid={!!errs[`${k}-addr`]}
+            aria-describedby={described(`${k}-addr`)}
+            className={textareaCls(!!errs[`${k}-addr`])}
+          />
+          {err(`${k}-addr`)}
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="t-body-sm font-semibold">
+            Coordinates <span className="font-normal text-ink-muted">(latitude, longitude)</span>
+          </span>
+          <input
+            value={s.coords}
+            onChange={(e) => set({ coords: e.target.value })}
+            inputMode="decimal"
+            placeholder="53.6745, -1.5285"
+            aria-invalid={!!errs[`${k}-coords`]}
+            aria-describedby={described(`${k}-coords`) ?? 'nd-coords-hint'}
+            className={`${inputCls(!!errs[`${k}-coords`])} font-mono`}
+          />
+          {err(`${k}-coords`)}
+        </label>
+        {contact && (
+          <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+            <label className="flex flex-col gap-1">
+              <span className="t-body-sm font-semibold">
+                Contact <span className="font-normal text-ink-muted">(optional)</span>
+              </span>
+              <input value={s.contactName} onChange={(e) => set({ contactName: e.target.value })} className={inputCls()} />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="t-body-sm font-semibold">
+                Contact phone <span className="font-normal text-ink-muted">(optional)</span>
+              </span>
+              <input value={s.contactPhone} onChange={(e) => set({ contactPhone: e.target.value })} type="tel" className={inputCls()} />
+            </label>
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
     <form
@@ -66,7 +145,7 @@ export function NewDeliveryForm({ defaultPickup, onCreated, onCancel }: Props) {
       {create.isError && (
         <div role="alert" className="flex flex-col gap-1 rounded-md border border-status-failed bg-status-failed-bg px-3 py-2.5">
           <span className="t-body-sm font-bold">Not created</span>
-          <span className="t-mono">{create.error.message}</span>
+          <span className="t-mono">{isConflict(create.error) ? `409 · ${create.error.message}` : create.error.message}</span>
         </div>
       )}
       <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
@@ -76,7 +155,7 @@ export function NewDeliveryForm({ defaultPickup, onCreated, onCancel }: Props) {
             value={customer}
             onChange={(e) => setCustomer(e.target.value)}
             aria-invalid={!!errs.customer}
-            aria-describedby={errs.customer ? 'nd-customer-err' : undefined}
+            aria-describedby={described('customer')}
             className={inputCls(!!errs.customer)}
           />
           {err('customer')}
@@ -88,56 +167,37 @@ export function NewDeliveryForm({ defaultPickup, onCreated, onCancel }: Props) {
           <input value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" className={inputCls()} />
         </label>
       </div>
-      <label className="flex flex-col gap-1">
-        <span className="t-body-sm font-semibold">Stop 1 · Pickup</span>
-        <textarea
-          value={pickup}
-          onChange={(e) => setPickup(e.target.value)}
-          rows={2}
-          aria-invalid={!!errs.pickup}
-          aria-describedby={errs.pickup ? 'nd-pickup-err' : undefined}
-          className={textareaCls(!!errs.pickup)}
-        />
-        {err('pickup')}
-      </label>
-      {drops.map((v, i) => {
-        const label = `Stop ${i + 2} · Drop-off`;
-        return (
-          <div key={i} className="flex flex-col gap-1">
-            <div className="flex items-center justify-between gap-2">
-              <span className="t-body-sm font-semibold" id={`nd-d${i}-label`}>
-                {label}
-              </span>
-              {drops.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDrops(drops.filter((_, j) => j !== i));
-                    setErrs({});
-                  }}
-                  aria-label={`Remove stop ${i + 2}`}
-                  className="min-h-11 rounded-md border border-border bg-surface-100 px-2.5 text-[12px] font-semibold text-ink"
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-            <textarea
-              value={v}
-              onChange={(e) => setDrops(drops.map((x, j) => (j === i ? e.target.value : x)))}
-              aria-labelledby={`nd-d${i}-label`}
-              aria-invalid={!!errs['d' + i]}
-              aria-describedby={errs['d' + i] ? `nd-d${i}-err` : undefined}
-              rows={2}
-              className={textareaCls(!!errs['d' + i])}
-            />
-            {err('d' + i)}
-          </div>
-        );
-      })}
+      <span id="nd-coords-hint" className="t-body-sm text-ink-muted">
+        Every stop needs coordinates inside the service area. Copy them from your map app.
+      </span>
+      {StopFields({ k: 'p', s: pickup, set: (x) => setPickup({ ...pickup, ...x }), label: 'Stop 1 · Pickup', contact: false })}
+      {drops.map((s, i) => (
+        <div key={i} className="flex flex-col gap-2 border-t border-divider pt-3">
+          {drops.length > 1 && (
+            <button
+              type="button"
+              onClick={() => {
+                setDrops(drops.filter((_, j) => j !== i));
+                setErrs({});
+              }}
+              aria-label={`Remove stop ${i + 2}`}
+              className="min-h-11 self-end rounded-md border border-border bg-surface-100 px-2.5 text-[12px] font-semibold text-ink"
+            >
+              Remove
+            </button>
+          )}
+          {StopFields({
+            k: `d${i}`,
+            s,
+            set: (x) => setDrops(drops.map((d, j) => (j === i ? { ...d, ...x } : d))),
+            label: `Stop ${i + 2} · Drop-off`,
+            contact: true,
+          })}
+        </div>
+      ))}
       <button
         type="button"
-        onClick={() => setDrops([...drops, ''])}
+        onClick={() => setDrops([...drops, blank()])}
         className="min-h-11 self-start rounded-md border border-dashed border-border bg-transparent px-3 text-[13px] font-semibold text-ink"
       >
         + Add drop-off

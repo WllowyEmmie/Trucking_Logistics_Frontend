@@ -1,8 +1,9 @@
-import { http, HttpResponse, delay } from 'msw';
+import { http, HttpResponse, delay, ws } from 'msw';
 import { API_URL } from '@/lib/api';
-import type { Config, FailReason, LocationPing } from '@/lib/types';
+import { positionsSocketUrl, type WsMessage } from '@/lib/positions';
 import { MockError, mock } from './data';
 
+// The Go API's routes (internal/api/routes.go), answered from mocks/data.ts.
 const u = (path: string) => `${API_URL}${path}`;
 
 /** Runs a mock call and turns MockError into the API's `{ error }` body. */
@@ -17,52 +18,66 @@ async function run(fn: () => unknown, status = 200) {
   }
 }
 
-const json = async <T,>(req: Request) => ((await req.json().catch(() => ({}))) as T);
+/** The handlers decode JSON first and answer "invalid json" on failure, as the Go handlers do. */
+async function json<T>(req: Request): Promise<T> {
+  try {
+    return (await req.json()) as T;
+  } catch {
+    throw new MockError(400, 'invalid json');
+  }
+}
+const withBody = <T,>(req: Request, fn: (b: T) => unknown, status = 200) => run(async () => fn(await json<T>(req)), status);
+
+// GET /ws (internal/api/ws.go): a snapshot on connect, then one `position` frame per truck that
+// reported. The Go API pushes on POST /locations; the mock simulation moves on read, so check each second.
+const positions = ws.link(positionsSocketUrl());
+const positionsSocket = positions.addEventListener('connection', ({ client }) => {
+  const send = (m: WsMessage) => client.send(JSON.stringify(m));
+  const seen = new Map<string, string | null>();
+  const trucks = mock.trucks();
+  trucks.forEach((t) => seen.set(t.id, t.last_seen_at));
+  send({ type: 'snapshot', trucks: trucks.map(({ id, lng, lat, last_seen_at, status }) => ({ id, lng, lat, last_seen_at, status })) });
+  const timer = setInterval(() => {
+    for (const { id, lng, lat, last_seen_at } of mock.trucks()) {
+      if (!last_seen_at || seen.get(id) === last_seen_at) continue;
+      seen.set(id, last_seen_at);
+      send({ type: 'position', truck: { id, lng, lat, last_seen_at } });
+    }
+  }, 1_000);
+  client.addEventListener('close', () => clearInterval(timer));
+});
 
 export const handlers = [
-  http.get(u('/health'), () => run(() => ({ ok: true }))),
-
+  positionsSocket,
+  http.get(u('/health'), () => run(() => mock.health())),
   http.get(u('/config'), () => run(() => mock.config())),
-  http.put(u('/config'), async ({ request }) => {
-    const body = await json<Partial<Config>>(request);
-    return run(() => mock.putConfig(body));
-  }),
-
-  http.get(u('/trucks'), () => run(() => mock.trucks())),
-  http.post(u('/trucks'), async ({ request }) => {
-    const body = await json<Parameters<typeof mock.createTruck>[0]>(request);
-    return run(() => mock.createTruck(body), 201);
-  }),
-
-  http.get(u('/drivers'), () => run(() => mock.drivers())),
-  http.post(u('/drivers'), async ({ request }) => {
-    const body = await json<Parameters<typeof mock.createDriver>[0]>(request);
-    return run(() => mock.createDriver(body), 201);
-  }),
-
-  http.get(u('/deliveries'), ({ request }) => run(() => mock.deliveries(new URL(request.url).searchParams.get('truck_id')))),
-  http.post(u('/deliveries'), async ({ request }) => {
-    const body = await json<Parameters<typeof mock.createDelivery>[0]>(request);
-    return run(() => mock.createDelivery(body), 201);
-  }),
-  http.post(u('/deliveries/:id/assign'), async ({ request, params }) => {
-    const body = await json<{ truck_id: string }>(request);
-    return run(() => mock.assign(String(params.id), body.truck_id));
-  }),
-  http.post(u('/deliveries/:id/start'), ({ params }) => run(() => mock.start(String(params.id)))),
-  http.post(u('/deliveries/:id/complete'), ({ params }) => run(() => mock.complete(String(params.id)))),
-  http.post(u('/deliveries/:id/fail'), async ({ request, params }) => {
-    const body = await json<{ reason: FailReason }>(request);
-    return run(() => mock.fail(String(params.id), body.reason));
-  }),
-
-  http.post(u('/locations'), async ({ request }) => {
-    const body = await json<{ truck_id: string; pings: LocationPing[] }>(request);
-    return run(() => mock.locations(body.truck_id, body.pings ?? []));
-  }),
-
   http.get(u('/track/:token'), ({ params }) => run(() => mock.track(String(params.token)))),
 
-  // TODO(proposals-api): not on the real API yet; the console treats its 404 as empty.
-  http.get(u('/proposals'), () => run(() => mock.proposals())),
+  http.post(u('/locations'), ({ request }) => withBody<Parameters<typeof mock.locations>[0]>(request, (b) => mock.locations(b), 201)),
+
+  http.get(u('/trucks'), () => run(() => mock.trucks())),
+  http.post(u('/trucks'), ({ request }) => withBody<Parameters<typeof mock.createTruck>[0]>(request, (b) => mock.createTruck(b), 201)),
+  http.patch(u('/trucks/:id'), ({ request, params }) =>
+    withBody<Parameters<typeof mock.updateTruck>[1]>(request, (b) => mock.updateTruck(String(params.id), b)),
+  ),
+
+  http.get(u('/drivers'), () => run(() => mock.drivers())),
+  http.post(u('/drivers'), ({ request }) => withBody<Parameters<typeof mock.createDriver>[0]>(request, (b) => mock.createDriver(b), 201)),
+
+  http.get(u('/deliveries'), ({ request }) => run(() => mock.deliveries(new URL(request.url).searchParams.get('status')))),
+  http.post(u('/deliveries'), ({ request }) => withBody<Parameters<typeof mock.createDelivery>[0]>(request, (b) => mock.createDelivery(b), 201)),
+  http.get(u('/deliveries/:id'), ({ params }) => run(() => mock.delivery(String(params.id)))),
+  http.post(u('/deliveries/:id/assign'), ({ request, params }) =>
+    withBody<{ truck_id?: string }>(request, (b) => mock.assign(String(params.id), b.truck_id)),
+  ),
+  http.post(u('/deliveries/:id/start'), ({ params }) => run(() => mock.start(String(params.id)))),
+  http.post(u('/deliveries/:id/complete'), ({ params }) => run(() => mock.complete(String(params.id)))),
+  http.post(u('/deliveries/:id/cancel'), ({ params }) => run(() => mock.cancel(String(params.id)))),
+  http.post(u('/deliveries/:id/fail'), ({ request, params }) => withBody<{ reason?: string }>(request, (b) => mock.fail(String(params.id), b.reason))),
+  http.post(u('/deliveries/:id/stops/:stopId/arrive'), ({ params }) => run(() => mock.advanceStop(String(params.id), String(params.stopId), 'arrive'))),
+  http.post(u('/deliveries/:id/stops/:stopId/complete'), ({ params }) => run(() => mock.advanceStop(String(params.id), String(params.stopId), 'complete'))),
+
+  // TODO(proposals-api): the API has no /proposals route; chi answers a plain-text 404, and the
+  // console counts that as "nothing to review".
+  http.get(u('/proposals'), () => new HttpResponse('404 page not found', { status: 404, headers: { 'Content-Type': 'text/plain' } })),
 ];

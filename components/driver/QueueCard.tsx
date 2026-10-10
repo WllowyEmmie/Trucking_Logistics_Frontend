@@ -19,9 +19,9 @@ export function QueueCard() {
         <div role="alert" className="flex flex-col gap-2.5 rounded-lg border-2 border-status-failed bg-status-failed-bg p-4">
           <span className="t-h2">Dispatch didn&apos;t accept this</span>
           <ul className="t-driver-meta m-0 flex list-none flex-col gap-1.5 p-0">
-            {queue.dropped.map((m, i) => (
-              <li key={i} className="font-mono text-[15px]">
-                {m}
+            {queue.dropped.map((d, i) => (
+              <li key={d.item.id ?? i} className="font-mono text-[15px]">
+                {d.message}
               </li>
             ))}
           </ul>

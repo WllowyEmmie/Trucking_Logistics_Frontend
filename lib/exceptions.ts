@@ -1,12 +1,15 @@
 // Pure rules. No fetching, no React: everything derived for the console header.
+import type { AppConfig } from './config';
 import { formatDuration, formatTime } from './format';
 import { failReasonLabel } from './labels';
-import type { Config, Delivery, Proposal, Truck } from './types';
+import type { DeliveryListItem, FailReason, Proposal, Truck } from './types';
 
 const MIN = 60_000;
 
+type Thresholds = Pick<AppConfig, 'stale_minutes' | 'pending_minutes' | 'failed_window_minutes' | 'timezone' | 'locale'>;
+
 /** Silent: a truck that should be reporting whose last position is at least `stale_minutes` old. */
-export function isStale(t: Truck, cfg: Config, now: number): boolean {
+export function isStale(t: Truck, cfg: Pick<AppConfig, 'stale_minutes'>, now: number): boolean {
   if (t.last_seen_at == null || t.lat == null || t.lng == null) return false;
   if (t.status !== 'on_delivery' && t.status !== 'available') return false;
   return now - Date.parse(t.last_seen_at) >= cfg.stale_minutes * MIN;
@@ -14,23 +17,17 @@ export function isStale(t: Truck, cfg: Config, now: number): boolean {
 
 export const hasPosition = (t: Truck): t is Truck & { lat: number; lng: number } => t.lat != null && t.lng != null;
 
-/** Index of the first stop not yet done or failed, or -1. */
-export function currentStopIndex(d: Delivery): number {
-  return d.stops.findIndex((s) => s.status === 'pending');
+export const isActive = (d: Pick<DeliveryListItem, 'status'>) => d.status === 'assigned' || d.status === 'in_transit';
+
+/** Trucks carry no delivery id: the active delivery assigned to each truck, from the list. */
+export function activeByTruck(deliveries: DeliveryListItem[]): Map<string, DeliveryListItem> {
+  const m = new Map<string, DeliveryListItem>();
+  for (const d of deliveries) if (d.truck_id && isActive(d)) m.set(d.truck_id, d);
+  return m;
 }
 
-export const doneCount = (d: Delivery): number => d.stops.filter((s) => s.status === 'done').length;
-
-/** Minutes the current stop is running past its promised time; 0 unless 10+ (the "late" rule). */
-export function lateMinutes(d: Delivery): number {
-  if (d.status !== 'in_transit' && d.status !== 'assigned') return 0;
-  const s = d.stops[currentStopIndex(d)];
-  if (!s?.eta || !s.promised_at) return 0;
-  const m = Math.round((Date.parse(s.eta) - Date.parse(s.promised_at)) / MIN);
-  return m >= 10 ? m : 0;
-}
-
-export const isActive = (d: Delivery) => d.status === 'assigned' || d.status === 'in_transit';
+/** End time and reason of a failed delivery: only GET /deliveries/{id} has them (in its events). */
+export type FailedInfo = Record<string, { at: string; reason: FailReason | null }>;
 
 export interface ExceptionRow {
   key: string;
@@ -45,30 +42,30 @@ export interface ExceptionRow {
 }
 
 export function deriveExceptions(
-  deliveries: Delivery[],
+  deliveries: DeliveryListItem[],
   trucks: Truck[],
+  driverName: (driverId: string | null) => string | null,
+  failed: FailedInfo,
   flags: Proposal[],
-  cfg: Config,
+  cfg: Thresholds,
   now: number,
 ): ExceptionRow[] {
   const out: ExceptionRow[] = [];
-  const tz = cfg.timezone;
+  const time = (iso: string) => formatTime(iso, cfg.timezone, cfg.locale);
   const byId = new Map(deliveries.map((d) => [d.id, d]));
+  const onTruck = activeByTruck(deliveries);
   const available = trucks.filter((t) => t.status === 'available' && hasPosition(t) && !isStale(t, cfg, now)).length;
 
   for (const t of trucks) {
     if (!isStale(t, cfg, now) || !t.last_seen_at) continue;
     const mins = Math.floor((now - Date.parse(t.last_seen_at)) / MIN);
-    const d = t.delivery_id ? byId.get(t.delivery_id) : undefined;
-    const onWhat = d
-      ? `on ${d.id}${d.stops[0]?.status === 'pending' ? ', not yet collected' : ''}`
-      : 'no delivery now';
+    const d = onTruck.get(t.id);
     out.push({
       key: `silent-${t.id}`,
       issue: 'Truck silent',
-      subject: `${t.plate_number} · ${t.driver_name ?? 'no driver'}`,
-      detail: `No position for ${mins} min · ${onWhat}`,
-      since: formatTime(t.last_seen_at, tz, cfg.locale),
+      subject: `${t.plate_number} · ${driverName(t.driver_id) ?? 'no driver'}`,
+      detail: `No position for ${mins} min · ${d ? `on ${d.reference}` : 'no delivery now'}`,
+      since: time(t.last_seen_at),
       agent: false,
       action: 'View',
       deliveryId: d?.id ?? null,
@@ -84,9 +81,9 @@ export function deriveExceptions(
       out.push({
         key: `pending-${d.id}`,
         issue: `Pending ${formatDuration(cfg.pending_minutes)}+`,
-        subject: `${d.id} · ${d.customer_name}`,
+        subject: `${d.reference} · ${d.customer_name}`,
         detail: `Waiting ${formatDuration(waited)} · ${available} trucks available`,
-        since: formatTime(d.created_at, tz, cfg.locale),
+        since: time(d.created_at),
         agent: false,
         action: 'Assign',
         deliveryId: d.id,
@@ -96,14 +93,14 @@ export function deriveExceptions(
   }
 
   for (const d of deliveries) {
-    if (d.status !== 'failed' || !d.ended_at) continue;
-    if (now - Date.parse(d.ended_at) > cfg.failed_window_minutes * MIN) continue;
+    const f = d.status === 'failed' ? failed[d.id] : undefined;
+    if (!f || now - Date.parse(f.at) > cfg.failed_window_minutes * MIN) continue;
     out.push({
       key: `failed-${d.id}`,
       issue: 'Failed',
-      subject: `${d.id} · ${d.customer_name}`,
-      detail: `Failed ${formatTime(d.ended_at, tz, cfg.locale)} · ${failReasonLabel(d.failure_reason)}`,
-      since: formatTime(d.ended_at, tz, cfg.locale),
+      subject: `${d.reference} · ${d.customer_name}`,
+      detail: `Failed ${time(f.at)} · ${failReasonLabel(f.reason)}`,
+      since: time(f.at),
       agent: false,
       action: 'View',
       deliveryId: d.id,
@@ -117,9 +114,9 @@ export function deriveExceptions(
     out.push({
       key: `agent-${p.id}`,
       issue: p.title,
-      subject: d ? `${d.id} · ${d.customer_name}` : (p.truck_id ?? ''),
+      subject: d ? `${d.reference} · ${d.customer_name}` : (p.truck_id ?? ''),
       detail: p.why,
-      since: formatTime(p.created_at, tz, cfg.locale),
+      since: time(p.created_at),
       agent: true,
       action: 'View',
       deliveryId: p.delivery_id,

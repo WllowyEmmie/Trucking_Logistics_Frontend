@@ -12,7 +12,7 @@ export type QueueKind = 'start' | 'complete' | 'fail' | 'locations' | 'stop';
 export interface QueueItem {
   id?: number;
   kind: QueueKind;
-  /** POST target. Null for stop events, which have no endpoint yet (TODO(stops-api)). */
+  /** POST target. Null for a purely local item (none at present; kept so old queued items still drain). */
   path: string | null;
   body?: unknown;
   /** What the driver did, e.g. "Arrived at stop 2". */
@@ -21,16 +21,24 @@ export interface QueueItem {
   at: string;
   deliveryId?: string;
   stopSeq?: number;
+  /** For stop events: which step, so a refused one can be rolled back. */
+  stopAction?: 'arrived' | 'done';
   /** For location batches: how many pings. */
   pings?: number;
+}
+
+export interface DroppedItem {
+  item: QueueItem;
+  /** Shown word for word, e.g. "Arrived at stop 2: 409 · stop is already arrived". */
+  message: string;
 }
 
 export interface QueueSnapshot {
   items: QueueItem[];
   /** The last send attempt failed for lack of a connection. */
   networkDown: boolean;
-  /** Messages from items the server refused (4xx), newest last. */
-  dropped: string[];
+  /** Items the server refused (4xx), with the message to show, newest last. */
+  dropped: DroppedItem[];
   /** Bumps each time an item leaves the queue, so readers can refetch. */
   sentCount: number;
   lastSent: QueueItem | null;
@@ -101,21 +109,21 @@ async function flush(): Promise<void> {
         set({ networkDown: true });
         return;
       }
-      let dropped: string | null = null;
+      let dropped: DroppedItem | null = null;
       if (it.path) {
         try {
           await post(it.path, it.body);
         } catch (e) {
           const status = e instanceof ApiError ? e.status : 0;
           if (status >= 400 && status < 500) {
-            dropped = `${it.label}: ${status === 409 ? '409 · ' : ''}${(e as Error).message}`;
+            dropped = { item: it, message: `${it.label}: ${status === 409 ? '409 · ' : ''}${(e as Error).message}` };
           } else {
             set({ networkDown: status === 0 });
             return;
           }
         }
       }
-      // TODO(stops-api): stop events have no endpoint; they leave the queue once there's a connection.
+      // An item with no path is local only: it leaves the queue once there's a connection.
       if (it.id != null) await tx('readwrite', (s) => s.delete(it.id!));
       set({
         items: snap.items.slice(1),

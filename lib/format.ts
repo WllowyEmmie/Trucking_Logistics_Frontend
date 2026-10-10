@@ -66,18 +66,19 @@ export function formatAgo(iso: string, now: number = Date.now()): string {
 
 const KM_PER_MI = 1.609344;
 
-/** "9.4 km" via Intl unit style. */
-export function formatDistance(km: number, units: 'km' | 'mi', locale = DEFAULT_LOCALE): string {
-  const v = units === 'km' ? km : km / KM_PER_MI;
+/** "9.4 km" via Intl unit style. `units` is the API's 'metric' | 'imperial'. */
+export function formatDistance(km: number, units: 'metric' | 'imperial', locale = DEFAULT_LOCALE): string {
+  const metric = units !== 'imperial';
+  const v = metric ? km : km / KM_PER_MI;
   try {
     return new Intl.NumberFormat(locale, {
       style: 'unit',
-      unit: units === 'km' ? 'kilometer' : 'mile',
+      unit: metric ? 'kilometer' : 'mile',
       unitDisplay: 'short',
       maximumFractionDigits: v < 100 ? 1 : 0,
     }).format(v);
   } catch {
-    return `${v.toFixed(1)} ${units}`;
+    return `${v.toFixed(1)} ${metric ? 'km' : 'mi'}`;
   }
 }
 

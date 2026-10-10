@@ -1,9 +1,12 @@
 import { formatDistance } from '@/lib/format';
-import type { Config, Truck } from '@/lib/types';
+import type { AppConfig } from '@/lib/config';
+import type { Truck } from '@/lib/types';
 
 export interface Candidate {
   truck: Truck;
   km: number;
+  /** From /drivers via the truck's driver_id. */
+  driver: string | null;
 }
 
 interface Props {
@@ -11,7 +14,7 @@ interface Props {
   availableCount: number;
   hover: string | null;
   busy: boolean;
-  config: Config;
+  config: AppConfig;
   onHover: (id: string | null) => void;
   onAssign: (truckId: string) => void;
 }
@@ -27,7 +30,7 @@ export function AssignPanel({ candidates, availableCount, hover, busy, config, o
           : `${availableCount} available · nearest to pickup first · straight-line distance`}
       </span>
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
-        {candidates.map(({ truck: t, km }) => {
+        {candidates.map(({ truck: t, km, driver }) => {
           const on = hover === t.id;
           const dist = formatDistance(km, config.units, config.locale);
           return (
@@ -44,7 +47,7 @@ export function AssignPanel({ candidates, availableCount, hover, busy, config, o
             >
               <div className="flex min-w-0 flex-col">
                 <span className="t-body-sm">
-                  <span className="t-mono font-bold">{t.plate_number}</span> · {t.driver_name ?? 'no driver'}
+                  <span className="t-mono font-bold">{t.plate_number}</span> · {driver ?? 'no driver'}
                 </span>
                 <span className="t-body-sm text-ink-muted">
                   {dist} · about {Math.max(2, Math.round(km * 2.4))} min to pickup
@@ -56,7 +59,7 @@ export function AssignPanel({ candidates, availableCount, hover, busy, config, o
                 onClick={() => onAssign(t.id)}
                 onFocus={() => onHover(t.id)}
                 onBlur={() => onHover(null)}
-                aria-label={`Assign ${t.plate_number}, ${t.driver_name ?? 'no driver'}, ${dist} from pickup`}
+                aria-label={`Assign ${t.plate_number}, ${driver ?? 'no driver'}, ${dist} from pickup`}
                 className="min-h-11 rounded-md border-0 bg-ink px-3.5 text-[13px] font-semibold text-surface-100 disabled:opacity-45"
               >
                 Assign

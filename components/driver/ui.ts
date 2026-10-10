@@ -25,9 +25,12 @@ export const smsHref = (phone: string, body: string) =>
   // "?&body=" works on both iOS and Android.
   `sms:${phone.replace(/[^\d+]/g, '')}?&body=${encodeURIComponent(body)}`;
 
-/** Hands off to the phone's own map app. */
-export function navHref(lat: number, lng: number, label: string): string {
+/** Hands off to the phone's own map app. Without coordinates, it searches the address. */
+export function navHref(lat: number | null, lng: number | null, label: string): string {
   const ios = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent);
+  if (lat == null || lng == null) {
+    return ios ? `https://maps.apple.com/?daddr=${encodeURIComponent(label)}` : `geo:0,0?q=${encodeURIComponent(label)}`;
+  }
   return ios
     ? `https://maps.apple.com/?daddr=${lat},${lng}&q=${encodeURIComponent(label)}`
     : `geo:${lat},${lng}?q=${lat},${lng}(${encodeURIComponent(label)})`;

@@ -1,4 +1,4 @@
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
 export class ApiError extends Error {
   constructor(
@@ -32,7 +32,8 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 export const post = <T>(path: string, body?: unknown) =>
   api<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
 
-export const put = <T>(path: string, body: unknown) => api<T>(path, { method: 'PUT', body: JSON.stringify(body) });
+export const patch = <T>(path: string, body: unknown) => api<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
+
 
 export const isConflict = (e: unknown): e is ApiError => e instanceof ApiError && e.status === 409;
 export const isNotFound = (e: unknown): e is ApiError => e instanceof ApiError && e.status === 404;

@@ -1,15 +1,17 @@
 import Link from 'next/link';
 
 // Development index: where each surface lives. Not part of any product surface.
+// Tracking tokens are exactly 16 characters in the API; these exist in the mock data.
 const TRACK = [
-  ['demo-in-transit', 'In transit'],
-  ['demo-pending', 'Pending'],
-  ['demo-assigned', 'Assigned'],
-  ['demo-stale', 'Stale position'],
-  ['demo-completed', 'Completed'],
-  ['demo-failed', 'Failed'],
-  ['demo-cancelled', 'Cancelled'],
-  ['no-such-link', 'Link not found'],
+  ['demointransit001', 'In transit (single drop-off)'],
+  ['demomultidrop001', 'In transit (multi-drop: other drop-offs hidden)'],
+  ['demopending00001', 'Pending'],
+  ['demoassigned0001', 'Assigned'],
+  ['demostale0000001', 'Stale position'],
+  ['democompleted001', 'Completed'],
+  ['demofailed000001', 'Failed'],
+  ['democancelled001', 'Cancelled'],
+  ['nosuchlink000000', 'Link not found'],
 ];
 
 export default function Home() {

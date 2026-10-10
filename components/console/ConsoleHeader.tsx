@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { ExceptionRow } from '@/lib/exceptions';
 import { formatDuration } from '@/lib/format';
-import type { Config } from '@/lib/types';
+import type { AppConfig } from '@/lib/config';
 import { ExceptionTable } from './ExceptionTable';
 
 export type CountKey = 'active' | 'pending' | 'attention';
@@ -15,7 +15,7 @@ export interface Count {
 }
 
 interface Props {
-  config: Config;
+  config: AppConfig;
   clock: string;
   counts: Count[];
   filter: string;
@@ -28,7 +28,7 @@ interface Props {
 const navLink = 'inline-flex min-h-11 items-center text-[14px] font-semibold';
 
 /** The rules behind the exception table, in the operator's own thresholds. */
-function rulesLine(cfg: Config): string {
+function rulesLine(cfg: AppConfig): string {
   const failed = cfg.failed_window_minutes === 60 ? 'the last hour' : `the last ${formatDuration(cfg.failed_window_minutes)}`;
   const parts = [
     `Silent ${cfg.stale_minutes}+ min`,

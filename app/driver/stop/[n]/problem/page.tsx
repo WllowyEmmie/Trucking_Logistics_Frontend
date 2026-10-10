@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { DriverScreen } from '@/components/driver/DriverScreen';
 import { primaryCls, primaryStyle, secondaryCls, secondaryStyle, topBtnCls } from '@/components/driver/ui';
-import { splitContact, useStop } from '@/components/driver/useStop';
+import { useStop } from '@/components/driver/useStop';
 import { FAIL_REASONS } from '@/lib/labels';
 import type { FailReason } from '@/lib/types';
 
@@ -66,7 +66,7 @@ export default function ProblemPage() {
       <div className="flex flex-col gap-1">
         <h1 className="t-display m-0">What&apos;s wrong?</h1>
         <span className="t-driver-meta text-ink-muted">
-          Stop {stop.seq} · {splitContact(stop.contact_name)[0] ?? delivery.customer_name}
+          Stop {stop.seq} · {delivery.customer_name}
         </span>
       </div>
       <div role="radiogroup" aria-label="Problem" className="flex flex-col gap-2">

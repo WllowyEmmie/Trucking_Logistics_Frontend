@@ -9,11 +9,13 @@ import { primaryCls, primaryStyle, secondaryCls, secondaryStyle, telHref } from 
 
 // Today: the stops of the current delivery, or the empty state.
 export default function DriverToday() {
-  const { active, stops, current, config, truck, truckId, gps, time, start, loading, loadError } = useDriver();
+  const { active, detail, stops, current, config, truckLabel, driverName, gps, time, start, loading, loadError } = useDriver();
   const callDispatch = (
-    <a href={telHref(config.dispatch_phone)} role="button" className={secondaryCls} style={secondaryStyle}>
-      Call dispatch
-    </a>
+    config.dispatch_phone ? (
+      <a href={telHref(config.dispatch_phone)} role="button" className={secondaryCls} style={secondaryStyle}>
+        Call dispatch
+      </a>
+    ) : undefined
   );
 
   if (!active) {
@@ -22,8 +24,8 @@ export default function DriverToday() {
       <DriverScreen bottom={callDispatch}>
         <div className="flex flex-col gap-3.5 pt-4">
           <span className="t-label text-ink-muted">
-            {truck?.plate_number ?? truckId}
-            {truck?.driver_name ? ` · ${truck.driver_name}` : ''}
+            {truckLabel}
+            {driverName ? ` · ${driverName}` : ''}
           </span>
           {loadError ? (
             <>
@@ -40,6 +42,9 @@ export default function DriverToday() {
       </DriverScreen>
     );
   }
+
+  // Stops only come with the delivery's detail.
+  if (!detail) return <DriverScreen notices={false}>{null}</DriverScreen>;
 
   const started = active.status === 'in_transit';
   const total = stops.length;
@@ -59,7 +64,7 @@ export default function DriverToday() {
       }
     >
       <div className="flex flex-col gap-2.5">
-        <span className="t-label text-ink-muted">Delivery {active.id}</span>
+        <span className="t-label text-ink-muted">Delivery {active.reference}</span>
         <h1 className="t-display m-0">{started && next ? `Stop ${next.seq} of ${total}` : `${total} stops`}</h1>
         <div role="img" aria-label={`${doneN} of ${total} stops done`} className="grid gap-1" style={{ gridTemplateColumns: `repeat(${total}, 1fr)` }}>
           {stops.map((s, i) => (

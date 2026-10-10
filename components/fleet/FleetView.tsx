@@ -1,50 +1,35 @@
 'use client';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { DispatchNav } from '@/components/console/DispatchNav';
 import { StatusPill } from '@/components/StatusPill';
-import { api } from '@/lib/api';
 import { useConfig } from '@/lib/config';
-import { formatNumber } from '@/lib/format';
+import { DRIVERS_KEY, useDrivers } from '@/lib/deliveries';
 import { TRUCKS_KEY, usePositions } from '@/lib/positions';
-import type { Config, Driver, DriverAppState, Truck } from '@/lib/types';
+import type { Driver, Truck } from '@/lib/types';
 import { AddDriverForm } from './AddDriverForm';
 import { AddTruckForm } from './AddTruckForm';
 
 type Tab = 'trucks' | 'drivers';
-const DRIVERS_KEY = ['drivers'] as const;
 
-const TRUCK_COLS = 'minmax(90px,.7fr) minmax(0,1.4fr) minmax(0,1.2fr) minmax(110px,.8fr) minmax(0,1fr)';
-const DRIVER_COLS = 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) minmax(120px,.9fr)';
-
-const APP_STATE: Record<DriverAppState, { label: string; color: string }> = {
-  signed_in_today: { label: 'Signed in today', color: 'var(--status-completed)' },
-  link_sent: { label: 'Link sent', color: 'var(--status-assigned)' },
-  never: { label: 'Not signed in yet', color: 'var(--ink-muted)' },
-};
+const TRUCK_COLS = 'minmax(90px,.7fr) minmax(0,1.6fr) minmax(110px,.8fr) minmax(0,1fr)';
+const DRIVER_COLS = 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr)';
 
 const NOTES: Record<Tab, string[]> = {
   trucks: [
     'Plate is the only required field and matches POST /trucks. Duplicates come back as 409 and are shown word for word.',
     'Model is optional in the API and helps dispatchers tell vans from rigids at a glance.',
-    'Payload and pallet spaces let the assign panel rule out trucks too small for a load. They need two new fields on /trucks; the mass unit comes from operator settings.',
-    '"Starts as" avoids a new truck showing as Available before it has passed its checks.',
+    '"Starts as" avoids a new truck showing as Available before it has passed its checks. In maintenance is set with PATCH /trucks/{id} right after it is added.',
+    'Payload and pallet spaces need new fields on /trucks.',
   ],
   drivers: [
     'Name and phone are required and match POST /drivers. A phone already on file comes back as 409.',
     'Phone is stored in international format so dispatch can call from anywhere.',
-    "Usual truck pre-fills the assign panel. It needs a driver–truck link, which the API doesn't have yet.",
-    'The app link replaces a password. Sign-in beyond a demo session is out of scope for now.',
+    "Usual truck is the truck's driver_id, set with PATCH /trucks/{id} once the driver is added. Only trucks with no usual driver are offered.",
+    'Texting the driver a link to the app needs a backend endpoint.',
   ],
 };
-
-function capacity(t: Truck, cfg: Config): string | null {
-  const a: string[] = [];
-  if (t.payload_kg) a.push(`${formatNumber(t.payload_kg, cfg.locale)} ${cfg.mass_unit}`);
-  if (t.pallet_spaces) a.push(`${formatNumber(t.pallet_spaces, cfg.locale)} pallets`);
-  return a.length ? a.join(' · ') : null;
-}
 
 interface Row {
   key: string;
@@ -61,10 +46,12 @@ export function FleetView() {
   const [fresh, setFresh] = useState<string | null>(null);
 
   const trucksQ = usePositions();
-  const driversQ = useQuery({ queryKey: DRIVERS_KEY, queryFn: () => api<Driver[]>('/drivers') });
+  const driversQ = useDrivers();
   const trucks = trucksQ.data ?? [];
   const drivers = driversQ.data ?? [];
-  const plate = (id: string | null) => (id ? (trucks.find((t) => t.id === id)?.plate_number ?? id) : null);
+  // The link runs truck → driver (trucks.driver_id); drivers carry no truck.
+  const driverName = (id: string | null) => (id ? (drivers.find((d) => d.id === id)?.name ?? null) : null);
+  const truckOf = (driverId: string) => trucks.find((t) => t.driver_id === driverId)?.plate_number ?? null;
   const isT = tab === 'trucks';
   const needle = q.trim().toLowerCase();
   const freshFirst = <T,>(list: T[], key: (x: T) => string) =>
@@ -72,33 +59,27 @@ export function FleetView() {
 
   const rows: Row[] = isT
     ? freshFirst(trucks, (t) => t.id)
-        .filter((t) => !needle || `${t.plate_number} ${t.model ?? ''} ${t.driver_name ?? ''}`.toLowerCase().includes(needle))
-        .map((t) => {
-          const cap = capacity(t, config);
-          return {
-            key: t.id,
-            fresh: fresh === t.id,
-            cells: [
-              <span key="p" className="t-mono wrap-anywhere font-bold">
-                {t.plate_number}
-              </span>,
-              <span key="m" className="t-body-sm wrap-anywhere">
-                {t.model ?? 'Model not given'}
-              </span>,
-              <span key="c" className={`t-body-sm wrap-anywhere ${cap ? '' : 'text-ink-muted'}`}>
-                {cap ?? 'Capacity not set'}
-              </span>,
-              <StatusPill key="s" status={t.status} size="sm" />,
-              <span key="d" className="t-body-sm wrap-anywhere text-ink-muted">
-                {t.driver_name ?? 'No usual driver'}
-              </span>,
-            ],
-          };
-        })
+        .filter((t) => !needle || `${t.plate_number} ${t.model ?? ''} ${driverName(t.driver_id) ?? ''}`.toLowerCase().includes(needle))
+        .map((t) => ({
+          key: t.id,
+          fresh: fresh === t.id,
+          cells: [
+            <span key="p" className="t-mono wrap-anywhere font-bold">
+              {t.plate_number}
+            </span>,
+            <span key="m" className={`t-body-sm wrap-anywhere ${t.model ? '' : 'text-ink-muted'}`}>
+              {t.model ?? 'Model not given'}
+            </span>,
+            <StatusPill key="s" status={t.status} size="sm" />,
+            <span key="d" className="t-body-sm wrap-anywhere text-ink-muted">
+              {driverName(t.driver_id) ?? 'No usual driver'}
+            </span>,
+          ],
+        }))
     : freshFirst(drivers, (d) => d.id)
-        .filter((d) => !needle || `${d.name} ${d.phone} ${plate(d.truck_id) ?? ''}`.toLowerCase().includes(needle))
+        .filter((d) => !needle || `${d.name} ${d.phone} ${truckOf(d.id) ?? ''}`.toLowerCase().includes(needle))
         .map((d) => {
-          const app = APP_STATE[d.app_state];
+          const plate = truckOf(d.id);
           return {
             key: d.id,
             fresh: fresh === d.id,
@@ -109,11 +90,8 @@ export function FleetView() {
               <span key="p" className="t-mono wrap-anywhere">
                 {d.phone}
               </span>,
-              <span key="t" className={`t-body-sm wrap-anywhere ${d.truck_id ? '' : 'text-ink-muted'}`}>
-                {plate(d.truck_id) ?? 'Assigned per delivery'}
-              </span>,
-              <span key="a" className="t-body-sm font-semibold" style={{ color: app.color }}>
-                {app.label}
+              <span key="t" className={`t-body-sm wrap-anywhere ${plate ? '' : 'text-ink-muted'}`}>
+                {plate ?? 'Assigned per delivery'}
               </span>,
             ],
           };
@@ -123,7 +101,7 @@ export function FleetView() {
   const loadError = isT ? trucksQ.error : driversQ.error;
   const title = isT ? 'Trucks' : 'Drivers';
   const searchHint = isT ? 'Plate, model or driver' : 'Name, phone or truck';
-  const heads = isT ? ['Plate', 'Model', 'Capacity', 'Status', 'Usual driver'] : ['Name', 'Phone', 'Usual truck', 'App'];
+  const heads = isT ? ['Plate', 'Model', 'Status', 'Usual driver'] : ['Name', 'Phone', 'Usual truck'];
   const cols = isT ? TRUCK_COLS : DRIVER_COLS;
 
   return (
@@ -234,7 +212,6 @@ export function FleetView() {
           {isT ? (
             <AddTruckForm
               trucks={trucks}
-              config={config}
               onAdded={(t) => {
                 qc.setQueryData<Truck[]>(TRUCKS_KEY, (ts) => [t, ...(ts ?? []).filter((x) => x.id !== t.id)]);
                 void qc.invalidateQueries({ queryKey: TRUCKS_KEY });
@@ -244,13 +221,14 @@ export function FleetView() {
             />
           ) : (
             <AddDriverForm
-              drivers={drivers}
               trucks={trucks}
-              onAdded={(d) => {
+              onAdded={(d, truck) => {
                 qc.setQueryData<Driver[]>(DRIVERS_KEY, (ds) => [d, ...(ds ?? []).filter((x) => x.id !== d.id)]);
                 void qc.invalidateQueries({ queryKey: DRIVERS_KEY });
-                // The usual-driver column on /trucks changes too.
-                void qc.invalidateQueries({ queryKey: TRUCKS_KEY });
+                if (truck) {
+                  qc.setQueryData<Truck[]>(TRUCKS_KEY, (ts) => ts?.map((x) => (x.id === truck.id ? { ...x, driver_id: truck.driver_id } : x)));
+                  void qc.invalidateQueries({ queryKey: TRUCKS_KEY });
+                }
                 setFresh(d.id);
                 setQ('');
               }}

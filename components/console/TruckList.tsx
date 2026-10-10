@@ -3,7 +3,8 @@
 import { StatusPill } from '@/components/StatusPill';
 import { isStale } from '@/lib/exceptions';
 import { formatWhen, secondsSince } from '@/lib/format';
-import type { Config, Truck, TruckStatus } from '@/lib/types';
+import type { AppConfig } from '@/lib/config';
+import type { DeliveryListItem, Truck, TruckStatus } from '@/lib/types';
 import { useNow } from '@/lib/useNow';
 import { chipCls } from './ui';
 
@@ -20,7 +21,11 @@ const RANK: Record<TruckStatus, number> = { on_delivery: 1, available: 2, mainte
 
 interface Props {
   trucks: Truck[];
-  config: Config;
+  config: AppConfig;
+  /** Trucks only carry a driver_id: names come from /drivers. */
+  driverName: (driverId: string | null) => string | null;
+  /** Trucks carry no delivery id: the active delivery comes from the list. */
+  deliveryOf: (truckId: string) => DeliveryListItem | undefined;
   filter: TruckFilter;
   onFilter: (f: TruckFilter) => void;
   isSelected: (t: Truck) => boolean;
@@ -28,7 +33,7 @@ interface Props {
 }
 
 /** Live operations only: no add or edit here (that's Fleet). Sorted stale first. */
-export function TruckList({ trucks, config, filter, onFilter, isSelected, onSelect }: Props) {
+export function TruckList({ trucks, config, driverName, deliveryOf, filter, onFilter, isSelected, onSelect }: Props) {
   const now = useNow(1000);
   const list = trucks
     .filter((t) => filter === 'all' || t.status === filter)
@@ -56,15 +61,15 @@ export function TruckList({ trucks, config, filter, onFilter, isSelected, onSele
           let dot = { color: 'var(--status-completed)', style: 'solid', fill: 'var(--status-completed)' };
           let bold = false;
           if (stale && t.last_seen_at) {
-            sub = `No position for ${Math.floor(secondsSince(t.last_seen_at, now) / 60)} min${t.delivery_id ? ` · ${t.delivery_id}` : ''}`;
+            sub = `No position for ${Math.floor(secondsSince(t.last_seen_at, now) / 60)} min${deliveryOf(t.id) ? ` · ${deliveryOf(t.id)!.reference}` : ''}`;
             dot = { color: 'var(--marker-stale)', style: 'dashed', fill: 'transparent' };
             bold = true;
           } else if (t.status === 'on_delivery') {
-            sub = `${t.delivery_id ?? 'No delivery'} · ${t.last_seen_at ? `ping ${secondsSince(t.last_seen_at, now)} s ago` : 'no position yet'}`;
+            sub = `${deliveryOf(t.id)?.reference ?? 'No delivery'} · ${t.last_seen_at ? `ping ${secondsSince(t.last_seen_at, now)} s ago` : 'no position yet'}`;
           } else if (t.status === 'available') {
             sub = t.last_seen_at ? `Free · ping ${secondsSince(t.last_seen_at, now)} s ago` : 'Free · no position yet';
           } else if (t.status === 'maintenance') {
-            sub = t.status_note ?? 'In the workshop';
+            sub = 'In the workshop';
             dot = { color: 'var(--ink-muted)', style: 'solid', fill: 'var(--ink-muted)' };
           } else {
             sub = t.last_seen_at ? `Last position ${formatWhen(t.last_seen_at, config.timezone, config.locale)}` : 'No position reported today';
@@ -81,7 +86,7 @@ export function TruckList({ trucks, config, filter, onFilter, isSelected, onSele
               >
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
                   <span className="t-mono font-bold">{t.plate_number}</span>
-                  <span className="t-body-sm min-w-[6em] flex-1">{t.driver_name ?? 'No driver'}</span>
+                  <span className="t-body-sm min-w-[6em] flex-1">{driverName(t.driver_id) ?? 'No driver'}</span>
                   <StatusPill status={t.status} size="sm" />
                 </span>
                 <span className="t-body-sm flex items-center gap-1.5 text-ink-muted" style={{ fontWeight: bold ? 700 : 400 }}>
