@@ -1,7 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import type { AppConfig } from '@/lib/config';
 import { hasPosition, isStale } from '@/lib/exceptions';
 import { formatDistance, formatTime, haversineKm } from '@/lib/format';
@@ -29,7 +29,7 @@ export function AskBox({ trucks, driverName, config, now, onSelectTruck }: Props
   const [q, setQ] = useState('');
   const [answer, setAnswer] = useState<Answer | null>(null);
 
-  function ask(e: FormEvent) {
+  function ask(e: SubmitEvent) {
     e.preventDefault();
     const text = q.toLowerCase();
     const foot = `From positions at ${formatTime(new Date(now), config.timezone, config.locale)}.`;
