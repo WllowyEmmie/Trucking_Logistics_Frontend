@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { api } from '@/lib/api';
+import { useApplyTheme } from '@/lib/theme';
 
 const MOCKING = process.env.NEXT_PUBLIC_API_MOCKING === 'enabled';
 
@@ -10,24 +11,6 @@ async function startMocks() {
   if (!MOCKING) return;
   const { worker } = await import('@/mocks/browser');
   await worker.start({ onUnhandledRequest: 'bypass', quiet: true });
-}
-
-/**
- * Follows the OS theme: tokens switch on `.dark`; map tiles stay light either way.
- * `.dark` goes on <body>, not <html>, so `:root` keeps the light values: globals.css captures the
- * light marker colours there for the map, which must not go dark.
- */
-function useSystemTheme() {
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const apply = () => {
-      document.body.classList.toggle('dark', mq.matches);
-      document.documentElement.style.colorScheme = mq.matches ? 'dark' : 'light';
-    };
-    apply();
-    mq.addEventListener('change', apply);
-    return () => mq.removeEventListener('change', apply);
-  }, []);
 }
 
 function HealthBanner() {
@@ -50,7 +33,8 @@ export function Providers({ children }: { children: ReactNode }) {
   // Everything here is live data and local time, so render on the client only:
   // no server/client time mismatch, and the mock worker is up before the first fetch.
   const [ready, setReady] = useState(false);
-  useSystemTheme();
+  // Light, dark or the OS's, from the theme switch (lib/theme.ts).
+  useApplyTheme();
   useEffect(() => {
     startMocks()
       .catch((e) => console.error('Mock API failed to start', e))

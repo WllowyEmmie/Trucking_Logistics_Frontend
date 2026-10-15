@@ -43,6 +43,8 @@ export interface DispatchMapProps {
   route?: MapRoute | null;
   links?: MapLink[];
   note?: string | null;
+  /** Above the note, in the attention colour: e.g. positions aren't live. */
+  alert?: string | null;
   dim?: boolean;
   controls?: boolean;
   legend?: boolean;

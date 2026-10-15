@@ -180,11 +180,16 @@ export default function StopPage() {
         </>
       ) : (
         <>
-          {/* TODO(stop-contacts): per-stop contact and notes are stored on create but not returned yet. */}
           <div className="flex flex-col gap-1">
             <span className="t-label text-ink-muted">Delivery for</span>
             <span className="t-driver-meta font-bold">{delivery.customer_name}</span>
           </div>
+          {stop.contactPhone && (
+            <div className="flex flex-col gap-1">
+              <span className="t-label text-ink-muted">Site contact</span>
+              <span className="t-driver-meta font-bold">{stop.contactName ?? stop.contactPhone}</span>
+            </div>
+          )}
           {detail?.delivery.goods_desc && (
             <div className="flex flex-col gap-1">
               <span className="t-label text-ink-muted">Goods</span>

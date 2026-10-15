@@ -1,5 +1,5 @@
 import { http, HttpResponse, delay, ws } from 'msw';
-import { API_URL } from '@/lib/api';
+import { AGENT_URL, API_URL } from '@/lib/api';
 import { positionsSocketUrl, type WsMessage } from '@/lib/positions';
 import { MockError, mock } from './data';
 
@@ -47,10 +47,29 @@ const positionsSocket = positions.addEventListener('connection', ({ client }) =>
   client.addEventListener('close', () => clearInterval(timer));
 });
 
+/**
+ * The agent's POST /ask (a separate service). Mock mode answers one question from the mock fleet,
+ * after a pause like a real ask, so the console never reaches a real agent reading real data.
+ */
+const askAgent = http.post(`${AGENT_URL}/ask`, async ({ request }) => {
+  const { question = '' } = (await request.json().catch(() => ({}))) as { question?: string };
+  await delay(1800);
+  if (!/free|available|idle/i.test(question)) {
+    return HttpResponse.json({ answer: "In mock mode I can only answer **which trucks are free**. Run the agent against the Go API for anything else." });
+  }
+  const names = new Map(mock.drivers().map((d) => [d.id, d.name]));
+  const free = mock.trucks().filter((t) => t.status === 'available');
+  const rows = free.map((t) => `| ${t.plate_number} | ${t.model ?? '—'} | ${(t.driver_id && names.get(t.driver_id)) ?? 'no driver'} |`);
+  const table = ['| Truck | Model | Driver |', '|---|---|---|', ...rows].join('\n');
+  return HttpResponse.json({ answer: `**${free.length} ${free.length === 1 ? 'truck is' : 'trucks are'} free.**\n\n${table}` });
+});
+
 export const handlers = [
   positionsSocket,
+  askAgent,
   http.get(u('/health'), () => run(() => mock.health())),
   http.get(u('/config'), () => run(() => mock.config())),
+  http.get(u('/geocode'), ({ request }) => run(() => mock.geocode(new URL(request.url).searchParams.get('q')))),
   http.get(u('/track/:token'), ({ params }) => run(() => mock.track(String(params.token)))),
 
   http.post(u('/locations'), ({ request }) => withBody<Parameters<typeof mock.locations>[0]>(request, (b) => mock.locations(b), 201)),
@@ -77,7 +96,8 @@ export const handlers = [
   http.post(u('/deliveries/:id/stops/:stopId/arrive'), ({ params }) => run(() => mock.advanceStop(String(params.id), String(params.stopId), 'arrive'))),
   http.post(u('/deliveries/:id/stops/:stopId/complete'), ({ params }) => run(() => mock.advanceStop(String(params.id), String(params.stopId), 'complete'))),
 
-  // TODO(proposals-api): the API has no /proposals route; chi answers a plain-text 404, and the
-  // console counts that as "nothing to review".
-  http.get(u('/proposals'), () => new HttpResponse('404 page not found', { status: 404, headers: { 'Content-Type': 'text/plain' } })),
+  http.get(u('/proposals'), ({ request }) => run(() => mock.proposals(new URL(request.url).searchParams.get('status')))),
+  http.post(u('/proposals'), ({ request }) => withBody<Parameters<typeof mock.createProposal>[0]>(request, (b) => mock.createProposal(b), 201)),
+  http.post(u('/proposals/:id/approve'), ({ params }) => run(() => mock.approveProposal(String(params.id)))),
+  http.post(u('/proposals/:id/reject'), ({ params }) => run(() => mock.rejectProposal(String(params.id)))),
 ];

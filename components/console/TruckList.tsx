@@ -46,7 +46,7 @@ export function TruckList({ trucks, config, driverName, deliveryOf, filter, onFi
         <span className="t-h3">Trucks · {trucks.length}</span>
         <span className="t-body-sm text-ink-muted">Select to filter deliveries</span>
       </div>
-      <div role="group" aria-label="Filter trucks" className="flex flex-wrap gap-2 border-b border-divider px-3 py-2.5">
+      <div role="group" aria-label="Filter trucks" className="flex gap-2 overflow-x-auto border-b border-divider px-3 py-2.5 [&>*]:flex-none">
         {FILTERS.map(([k, label]) => (
           <button key={k} type="button" aria-pressed={filter === k} onClick={() => onFilter(k)} className={chipCls(filter === k)}>
             {label}

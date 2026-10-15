@@ -82,7 +82,7 @@ export function deriveExceptions(
         key: `pending-${d.id}`,
         issue: `Pending ${formatDuration(cfg.pending_minutes)}+`,
         subject: `${d.reference} · ${d.customer_name}`,
-        detail: `Waiting ${formatDuration(waited)} · ${available} trucks available`,
+        detail: `Waiting ${formatDuration(waited)} · ${available} ${available === 1 ? 'truck' : 'trucks'} available`,
         since: time(d.created_at),
         agent: false,
         action: 'Assign',
@@ -111,10 +111,11 @@ export function deriveExceptions(
   for (const p of flags) {
     if (p.kind !== 'flag') continue;
     const d = p.delivery_id ? byId.get(p.delivery_id) : undefined;
+    const t = p.truck_id ? trucks.find((x) => x.id === p.truck_id) : undefined;
     out.push({
       key: `agent-${p.id}`,
       issue: p.title,
-      subject: d ? `${d.reference} · ${d.customer_name}` : (p.truck_id ?? ''),
+      subject: d ? `${d.reference} · ${d.customer_name}` : t ? `${t.plate_number} · ${driverName(t.driver_id) ?? 'no driver'}` : '—',
       detail: p.why,
       since: time(p.created_at),
       agent: true,

@@ -19,17 +19,17 @@ interface Props {
   onAssign: (truckId: string) => void;
 }
 
-/** Up to five available trucks, nearest to the pickup by straight-line distance. */
+/** Up to five available trucks, nearest to the pickup by straight-line distance. One line each. */
 export function AssignPanel({ candidates, availableCount, hover, busy, config, onHover, onAssign }: Props) {
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-border bg-surface-100 p-3">
-      <span className="t-h3">Assign a truck</span>
-      <span className="t-body-sm text-ink-muted">
-        {availableCount === 0
-          ? 'No trucks are available right now.'
-          : `${availableCount} available · nearest to pickup first · straight-line distance`}
-      </span>
-      <ul className="m-0 flex list-none flex-col gap-2 p-0">
+    <div className="flex flex-col gap-1.5 rounded-md border border-border bg-surface-100 p-2.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+        <span className="t-h3">Assign a truck</span>
+        <span className="t-body-sm text-ink-muted">
+          {availableCount === 0 ? 'None available right now' : `${availableCount} available · nearest first`}
+        </span>
+      </div>
+      <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
         {candidates.map(({ truck: t, km, driver }) => {
           const on = hover === t.id;
           const dist = formatDistance(km, config.units, config.locale);
@@ -38,21 +38,18 @@ export function AssignPanel({ candidates, availableCount, hover, busy, config, o
               key={t.id}
               onMouseEnter={() => onHover(t.id)}
               onMouseLeave={() => onHover(null)}
-              className="grid items-center gap-2 rounded-md py-1.5 ps-2.5 pe-1.5"
+              className="grid items-center gap-2 rounded-md py-1 ps-2.5 pe-1"
               style={{
                 gridTemplateColumns: 'minmax(0,1fr) auto',
                 border: on ? '2px solid var(--focus-ring)' : '1px solid var(--divider)',
                 background: on ? 'var(--status-assigned-bg)' : 'var(--surface-100)',
               }}
             >
-              <div className="flex min-w-0 flex-col">
-                <span className="t-body-sm">
-                  <span className="t-mono font-bold">{t.plate_number}</span> · {driver ?? 'no driver'}
-                </span>
-                <span className="t-body-sm text-ink-muted">
-                  {dist} · about {Math.max(2, Math.round(km * 2.4))} min to pickup
-                </span>
-              </div>
+              {/* Straight-line distance only: there's no ETA in the API, so no "minutes to pickup". */}
+              <span className="t-body-sm min-w-0">
+                <span className="t-mono font-bold">{t.plate_number}</span> · {driver ?? 'no driver'} ·{' '}
+                <span className="whitespace-nowrap text-ink-muted">{dist}</span>
+              </span>
               <button
                 type="button"
                 disabled={busy}

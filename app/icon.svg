@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Favicon: the driver app icon's truck on the blue of drop-off pins and Assigned (status-assigned, #1f5b99).
+       Literal colours: an icon can't read CSS tokens. Thicker strokes than the app icon so it holds at 16px.
+       No double hyphen in this comment: XML forbids it, and the icon would fail to load. -->
+  <rect width="512" height="512" rx="112" fill="#1f5b99"/>
+  <g transform="translate(40 40) scale(18)" fill="none" stroke="#fafaf9" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/>
+    <path d="M15 18H9"/>
+    <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/>
+    <circle cx="17" cy="18" r="2"/>
+    <circle cx="7" cy="18" r="2"/>
+  </g>
+</svg>

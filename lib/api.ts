@@ -37,3 +37,40 @@ export const patch = <T>(path: string, body: unknown) => api<T>(path, { method: 
 
 export const isConflict = (e: unknown): e is ApiError => e instanceof ApiError && e.status === 409;
 export const isNotFound = (e: unknown): e is ApiError => e instanceof ApiError && e.status === 404;
+
+// ---- The dispatch agent: a separate service on its own origin ----
+
+/** It has CORS for localhost:3000 and :3471, so the browser calls it directly (no rewrite). */
+export const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL ?? 'http://localhost:8200';
+/** An ask makes several model and tool calls; past this it's stuck, not thinking. */
+export const ASK_TIMEOUT_MS = 90_000;
+/** ApiError status for an ask that ran past ASK_TIMEOUT_MS. */
+export const TIMED_OUT = -1;
+
+/**
+ * POST /ask {question} → answer. Errors are ApiErrors: status 0 when the agent can't be reached,
+ * TIMED_OUT when it took too long, otherwise the agent's own `detail`. Aborting `signal` (a newer
+ * question replacing this one) rejects with the AbortError, which callers ignore.
+ */
+export async function askAgent(question: string, signal: AbortSignal): Promise<string> {
+  const timeout = AbortSignal.timeout(ASK_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${AGENT_URL}/ask`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question }),
+      signal: AbortSignal.any([signal, timeout]),
+    });
+  } catch (e) {
+    if (signal.aborted) throw e;
+    if (timeout.aborted) throw new ApiError(TIMED_OUT, `No answer after ${ASK_TIMEOUT_MS / 1000} s.`);
+    throw new ApiError(0, `The agent isn't reachable at ${AGENT_URL}.`);
+  }
+  if (!res.ok) {
+    // FastAPI errors are {detail}: a string from the agent, a list for a validation error.
+    const body = (await res.json().catch(() => ({}))) as { detail?: unknown };
+    throw new ApiError(res.status, typeof body.detail === 'string' ? body.detail : `The agent answered ${res.status} ${res.statusText}.`);
+  }
+  return ((await res.json()) as { answer: string }).answer;
+}

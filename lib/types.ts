@@ -1,5 +1,3 @@
-// API shapes. Nullable fields are typed `| null` and must be handled: a truck with
-// null coordinates is never drawn, and is never drawn at 0,0.
 // API shapes, written against the Go API as it actually is.
 //
 // Nullable fields are `| null` and must be handled: a truck with null
@@ -48,6 +46,9 @@ export interface Stop {
   status: StopStatus;
   arrived_at: string | null;
   completed_at: string | null;
+  /** The site contact at this stop, when one was given on create. Falls back to the customer. */
+  contact_name: string | null;
+  contact_phone: string | null;
 }
 
 /** POST /deliveries returns a narrower stop row than GET /deliveries/{id}. */
@@ -64,13 +65,14 @@ export interface CreatedStop {
 export interface DeliveryEvent {
   id: number;
   /** Free-form on the server. Known values: created, assigned, in_transit,
-   *  completed, cancelled, failed, stop_arrived, stop_completed. */
+   *  completed, cancelled, failed, stop_arrived, stop_completed, and
+   *  truck_maintenance (after a breakdown or accident failure). */
   event_type: string;
+  /** On a `failed` event, the bare reason (see `failReasonOf`); on `assigned`, a human note. */
   note: string | null;
   created_at: string;
-  /** TODO(events-stop-id): the column exists and is populated, but
-   *  ListEventsForDelivery does not select it yet. */
-  stop_id?: string | null;
+  /** Set on stop_arrived / stop_completed; null on delivery-level events. */
+  stop_id: string | null;
 }
 
 // ---- Deliveries ----
@@ -216,9 +218,18 @@ export interface TrackStop {
   arrived_at: string | null;
 }
 
+/** /track events (TrackingEvent): no `id` and no `stop_id`, unlike /deliveries/{id} events. */
+export interface TrackEvent {
+  event_type: string;
+  note: string | null;
+  created_at: string;
+}
+
 export interface TrackResponse {
   reference: string;
   status: DeliveryStatus;
+  /** The assigned truck's plate; null until one is assigned (and again after a cancel). */
+  plate_number: string | null;
   customer_name: string;
   goods_desc: string | null;
   created_at: string;
@@ -226,10 +237,21 @@ export interface TrackResponse {
   truck_lng: number | null;
   truck_lat: number | null;
   truck_seen_at: string | null;
+  /** Every stop on the delivery. They all belong to the one customer holding the link. */
   stops: TrackStop[];
   /** Oldest first. The failure reason, when there is one, is in the note of
    *  the `failed` event — there is no separate failure_reason field. */
-  events: DeliveryEvent[];
+  events: TrackEvent[];
+}
+
+// ---- Address search: GET /geocode?q= ----
+
+/** One match for an address, inside the service area only (the API filters). q is 3–200 characters;
+ *  502 when the provider is down, with a message to show as-is. */
+export interface GeocodePlace {
+  label: string;
+  lat: number;
+  lng: number;
 }
 
 // ---- Config: GET /config ----
@@ -263,9 +285,11 @@ export const THRESHOLDS = {
   ping_seconds: 15,
 } as const;
 
-// ---- Agent: GET /proposals ----
-// TODO(proposals-api): no endpoint exists. A 404 must be treated as empty,
-// not as an error. These shapes are a guess and will change.
+// ---- Agent: /proposals (internal/api/proposal.go) ----
+// GET /proposals?status= (default pending), POST /proposals (the agent writes; the console
+// doesn't), POST /proposals/{id}/approve|reject. All four return this shape.
+
+export type ProposalStatus = 'pending' | 'approved' | 'rejected' | 'expired';
 
 export interface ProposalChange {
   k: string;
@@ -275,12 +299,18 @@ export interface ProposalChange {
 
 export interface Proposal {
   id: string;
+  /** A change carries an action and can be approved; a flag has none (approving it is a 409). */
   kind: 'change' | 'flag';
-  created_at: string;
+  status: ProposalStatus;
   title: string;
   why: string;
   delivery_id: string | null;
   truck_id: string | null;
+  /** Approving runs this server-side (assignTruckTx): the console doesn't call /assign itself. */
   action: { type: 'assign'; delivery_id: string; truck_id: string } | null;
   changes: ProposalChange[];
+  created_at: string;
+  decided_at: string | null;
+  /** "dispatcher", "agent", or "system: <reason>" when a stale approve expired it. */
+  decided_by: string | null;
 }

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { DispatchMap, type LatLng, type MapLink, type MapRoute, type MapStop, type MapTruck } from '@/components/map';
-import { api, isConflict, isNotFound, post } from '@/lib/api';
+import { api, isConflict, post } from '@/lib/api';
 import { useConfig } from '@/lib/config';
 import {
   DELIVERIES_KEY,
@@ -18,19 +18,19 @@ import {
   useDeliveryDetails,
   useDrivers,
 } from '@/lib/deliveries';
-import { activeByTruck, deriveExceptions, hasPosition, isActive, isStale, type ExceptionRow, type FailedInfo } from '@/lib/exceptions';
+import { activeByTruck, deriveExceptions, hasPosition, isStale, type ExceptionRow, type FailedInfo } from '@/lib/exceptions';
 import { formatTime, minutesSince, tzAbbr } from '@/lib/format';
 import { STATUS_LABEL } from '@/lib/labels';
-import { TRUCKS_KEY, usePositions } from '@/lib/positions';
+import { TRUCKS_KEY, usePositions, usePositionsStatus } from '@/lib/positions';
 import type { CreateDeliveryResponse, DeliveryListItem, Proposal, Truck } from '@/lib/types';
 
 /** POST /deliveries/{id}/assign returns the delivery row; only these fields are used. */
 type AssignResponse = Pick<DeliveryListItem, 'id' | 'reference' | 'status' | 'truck_id'>;
 import { useElementWidth } from '@/lib/useElementWidth';
 import { useNow } from '@/lib/useNow';
-import { ConsoleHeader, type Count, type CountKey } from './ConsoleHeader';
+import { ConsoleHeader } from './ConsoleHeader';
 import { DELIVERY_FILTERS, DeliveryList, type AssignError, type DeliveryFilter } from './DeliveryList';
-import { ProposalsPane } from './ProposalsPane';
+import { ProposalsPane, type ProposalError } from './ProposalsPane';
 import { TruckList, type TruckFilter } from './TruckList';
 import { tabCls } from './ui';
 
@@ -38,8 +38,10 @@ const PROPOSALS_KEY = ['proposals'] as const;
 
 /** Below this container width (200% zoom on a 1440 screen) the panes become tabs. */
 const NARROW_PX = 1000;
-/** Markers glide over the /trucks poll interval. */
-const MAP_ANIMATE_S = 10;
+/** Markers glide between fixes: about the simulator's/phone's report interval while the socket is
+ *  live, and over the 10 s /trucks poll when it's down. */
+const MAP_ANIMATE_LIVE_S = 3;
+const MAP_ANIMATE_POLL_S = 10;
 /** Failed deliveries older than this can't be in the exception window; their detail isn't fetched. */
 const FAILED_LOOKBACK_MS = 48 * 60 * 60_000;
 
@@ -49,21 +51,14 @@ type Hover = { id: string; link: boolean } | null;
 interface AssignVars {
   deliveryId: string;
   truckId: string;
-  proposalId?: string;
 }
+type Decision = { p: Proposal; verb: 'approve' | 'reject' };
 type Params = Partial<Record<'d' | 't' | 'f', string | null>>;
 
 const pos = (x: { lat: number; lng: number }): LatLng => ({ lat: x.lat, lng: x.lng });
 
-async function fetchProposals(): Promise<Proposal[]> {
-  try {
-    return await api<Proposal[]>('/proposals');
-  } catch (e) {
-    // TODO(proposals-api): GET /proposals doesn't exist; its 404 means "nothing to review".
-    if (isNotFound(e)) return [];
-    throw e;
-  }
-}
+/** The pending queue (the API's default). */
+const fetchProposals = () => api<Proposal[]>('/proposals');
 
 export function ConsoleView() {
   const config = useConfig();
@@ -100,7 +95,9 @@ export function ConsoleView() {
   const [tab, setTab] = useState<Tab>('deliveries');
   const [propOpen, setPropOpen] = useState(false);
   const [propNote, setPropNote] = useState<string | null>(null);
-  const [rejected, setRejected] = useState<Set<string>>(() => new Set());
+  // A refused approve or reject, kept where its card was until dismissed: a stale proposal is
+  // expired by the server and leaves the pending list on the next refetch.
+  const [propErrors, setPropErrors] = useState<Record<string, ProposalError>>({});
   const [creating, setCreating] = useState(false);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, AssignError>>({});
@@ -125,6 +122,7 @@ export function ConsoleView() {
   // ---- Data ----
   const deliveriesQ = useDeliveries();
   const trucksQ = usePositions();
+  const posStatus = usePositionsStatus();
   const driversQ = useDrivers();
   const proposalsQ = useQuery({
     queryKey: PROPOSALS_KEY,
@@ -159,7 +157,7 @@ export function ConsoleView() {
 
   const allProposals = config.agent_enabled ? (proposalsQ.data ?? []) : [];
   const flags = allProposals.filter((p) => p.kind === 'flag');
-  const changes = allProposals.filter((p) => p.kind === 'change' && !rejected.has(p.id));
+  const changes = allProposals.filter((p) => p.kind === 'change');
 
   const exceptions = deriveExceptions(deliveries, trucks, driverName, failed, flags, config, now);
   const attentionIds = new Set(exceptions.flatMap((x) => (x.deliveryId ? [x.deliveryId] : [])));
@@ -186,12 +184,7 @@ export function ConsoleView() {
     onError: (e, v, ctx) => {
       if (ctx?.prevD) qc.setQueryData(DELIVERIES_KEY, ctx.prevD);
       if (ctx?.prevT) qc.setQueryData(TRUCKS_KEY, ctx.prevT);
-      const conflict = isConflict(e);
-      if (v.proposalId) {
-        setPropNote(conflict ? `Not applied: the data was out of date. 409 · ${e.message}` : `Not applied. ${e.message}`);
-      } else {
-        setError(v.deliveryId, { conflict, message: e.message, truckId: v.truckId });
-      }
+      setError(v.deliveryId, { conflict: isConflict(e), message: e.message, truckId: v.truckId });
     },
     onSuccess: (d, v) => {
       qc.setQueryData<DeliveryListItem[]>(DELIVERIES_KEY, (ds) =>
@@ -200,8 +193,7 @@ export function ConsoleView() {
       const t = T.get(v.truckId);
       const plate = t?.plate_number ?? 'the truck';
       const who = driverName(t?.driver_id ?? null);
-      if (v.proposalId) setPropNote(`Approved. ${plate} has ${d.reference}; its driver has been notified.`);
-      else setNote(d.id, `Assigned ${plate}. ${who ?? 'The driver'} has the delivery on their phone.`);
+      setNote(d.id, `Assigned ${plate}. ${who ?? 'The driver'} has the delivery on their phone.`);
     },
     onSettled: (_d, _e, v) => {
       void qc.invalidateQueries({ queryKey: DELIVERIES_KEY });
@@ -210,6 +202,34 @@ export function ConsoleView() {
       if (config.agent_enabled) void qc.invalidateQueries({ queryKey: PROPOSALS_KEY });
     },
   });
+
+  // ---- Proposals: approve runs the action server-side; the console never calls /assign for it ----
+  const decide = useMutation({
+    mutationFn: ({ p, verb }: Decision) => post<Proposal>(`/proposals/${encodeURIComponent(p.id)}/${verb}`),
+    onMutate: ({ p }) => {
+      setPropNote(null);
+      setPropErrors(({ [p.id]: _gone, ...rest }) => rest);
+      setHover(null);
+    },
+    onSuccess: (_r, { p, verb }) => {
+      qc.setQueryData<Proposal[]>(PROPOSALS_KEY, (ps) => ps?.filter((x) => x.id !== p.id));
+      const ref = deliveries.find((d) => d.id === (p.action?.delivery_id ?? p.delivery_id))?.reference ?? 'the delivery';
+      const plate = (p.action && T.get(p.action.truck_id)?.plate_number) ?? 'The truck';
+      setPropNote(verb === 'approve' ? `Approved. ${plate} has ${ref}.` : `Rejected. ${p.title} won't be applied.`);
+    },
+    onError: (e, { p, verb }) => {
+      const index = changes.findIndex((x) => x.id === p.id);
+      setPropErrors((m) => ({ ...m, [p.id]: { p, verb, conflict: isConflict(e), message: e.message, index: Math.max(0, index) } }));
+    },
+    onSettled: (_r, _e, { p }) => {
+      void qc.invalidateQueries({ queryKey: PROPOSALS_KEY });
+      void qc.invalidateQueries({ queryKey: DELIVERIES_KEY });
+      void qc.invalidateQueries({ queryKey: TRUCKS_KEY });
+      const d = p.action?.delivery_id ?? p.delivery_id;
+      if (d) void qc.invalidateQueries({ queryKey: detailKey(d) });
+    },
+  });
+  const deciding = decide.isPending ? decide.variables : undefined;
   const pendingVars = assign.isPending ? assign.variables : undefined;
 
   function doAssign(deliveryId: string, truckId: string) {
@@ -236,9 +256,6 @@ export function ConsoleView() {
     setHover(x.truckId ? { id: x.truckId, link: false } : null);
     setTab('deliveries');
   }
-  function onCount(k: CountKey) {
-    setParams({ f: filter === k ? 'all' : k });
-  }
   function onCreated(r: CreateDeliveryResponse) {
     const d = r.delivery;
     const item: DeliveryListItem = { id: d.id, reference: d.reference, status: d.status, customer_name: d.customer_name, truck_id: null, created_at: d.created_at };
@@ -251,18 +268,6 @@ export function ConsoleView() {
   }
 
   // ---- Proposals ----
-  function approve(p: Proposal) {
-    if (!p.action) return;
-    setPropNote(null);
-    assign.mutate({ deliveryId: p.action.delivery_id, truckId: p.action.truck_id, proposalId: p.id });
-  }
-  function reject(p: Proposal) {
-    // TODO(proposals-api): rejection is client-side until there's an endpoint.
-    setRejected((s) => new Set(s).add(p.id));
-    const ref = deliveries.find((d) => d.id === p.delivery_id)?.reference;
-    setPropNote(`Rejected. The agent won't propose this change for ${ref ?? 'this delivery'} again this shift.`);
-    setHover(null);
-  }
   function showProposal(p: Proposal) {
     const d = p.action?.delivery_id ?? p.delivery_id;
     const t = p.action?.truck_id ?? p.truck_id;
@@ -275,13 +280,6 @@ export function ConsoleView() {
   }
 
   // ---- Header ----
-  const active = deliveries.filter(isActive).length;
-  const pendingN = deliveries.filter((d) => d.status === 'pending').length;
-  const counts: Count[] = [
-    { key: 'active', n: active, label: 'Active', color: 'var(--ink)' },
-    { key: 'pending', n: pendingN, label: 'Unassigned', color: pendingN ? 'var(--status-pending)' : 'var(--ink)' },
-    { key: 'attention', n: exceptions.length, label: 'Needs attention', color: exceptions.length ? 'var(--attention)' : 'var(--ink)' },
-  ];
   const nowD = new Date(now);
   const clock = `${formatTime(nowD, tz, config.locale)} ${tzAbbr(tz, nowD, config.locale)}`;
 
@@ -370,9 +368,6 @@ export function ConsoleView() {
       <ConsoleHeader
         config={config}
         clock={clock}
-        counts={counts}
-        filter={filter}
-        onCount={onCount}
         exceptions={exceptions}
         stacked={narrow}
         onView={onException}
@@ -403,7 +398,8 @@ export function ConsoleView() {
           aria-label="Deliveries"
           role={narrow ? 'tabpanel' : undefined}
           className="min-h-0 min-w-0 flex-col border-e border-border bg-surface-100"
-          style={{ display: show('deliveries') ? 'flex' : 'none', flex: narrow ? '1 1 auto' : '0 0 400px' }}
+          // Wider while the new-delivery form is open: the map gives up the room.
+          style={{ display: show('deliveries') ? 'flex' : 'none', flex: narrow ? '1 1 auto' : creating ? '0 0 560px' : '0 0 400px' }}
         >
           <DeliveryList
             deliveries={deliveries}
@@ -424,7 +420,7 @@ export function ConsoleView() {
             hover={hover?.id ?? null}
             notes={notes}
             errors={errors}
-            assigningId={pendingVars && !pendingVars.proposalId ? pendingVars.deliveryId : null}
+            assigningId={pendingVars?.deliveryId ?? null}
             creating={creating}
             onFilter={(f) => setParams({ f })}
             onClearTruck={() => setParams({ t: null })}
@@ -444,8 +440,6 @@ export function ConsoleView() {
               if (open) setTab('deliveries');
             }}
             onCreated={onCreated}
-            onAskDelivery={selectDelivery}
-            onAskTruck={toggleTruck}
           />
         </section>
 
@@ -464,10 +458,16 @@ export function ConsoleView() {
             route={map.route}
             links={map.links}
             note={map.note}
+            alert={
+              posStatus === 'down'
+                ? `Positions aren't live · reconnecting${trucksQ.dataUpdatedAt ? ` · last update ${formatTime(new Date(trucksQ.dataUpdatedAt), tz, config.locale)}` : ''}`
+                : null
+            }
+            dim={posStatus === 'down'}
             controls
             legend
             staleMinutes={config.stale_minutes}
-            animateSeconds={MAP_ANIMATE_S}
+            animateSeconds={posStatus === 'live' ? MAP_ANIMATE_LIVE_S : MAP_ANIMATE_POLL_S}
             onTruck={toggleTruck}
             fitKey={map.fitKey}
             fitPoints={map.fitPoints}
@@ -508,12 +508,14 @@ export function ConsoleView() {
               collapsible={!narrow}
               note={propNote}
               lastCheck={lastCheck}
-              busyId={pendingVars?.proposalId ?? null}
+              errors={propErrors}
+              busy={deciding ? { id: deciding.p.id, verb: deciding.verb } : null}
               config={config}
               onToggle={() => setPropOpen((o) => !o)}
               onShow={showProposal}
-              onApprove={approve}
-              onReject={reject}
+              onApprove={(p) => decide.mutate({ p, verb: 'approve' })}
+              onReject={(p) => decide.mutate({ p, verb: 'reject' })}
+              onDismiss={(id) => setPropErrors(({ [id]: _gone, ...rest }) => rest)}
             />
           </aside>
         )}

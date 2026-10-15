@@ -15,8 +15,10 @@ import { btnPrimary, btnSecondary, chipCls } from './ui';
 
 export type DeliveryFilter = 'all' | 'active' | 'attention' | DeliveryStatus;
 
+// Every list filter lives here, above the list it changes. The header counts only show numbers.
 const CHIPS: [DeliveryFilter, string][] = [
   ['all', 'All'],
+  ['attention', 'Needs attention'],
   ['pending', 'Pending'],
   ['assigned', 'Assigned'],
   ['in_transit', 'In transit'],
@@ -24,8 +26,8 @@ const CHIPS: [DeliveryFilter, string][] = [
   ['completed', 'Completed'],
   ['cancelled', 'Cancelled'],
 ];
-/** Filters set from the header counts; shown as a removable chip. */
-const HEADER_FILTERS: Partial<Record<DeliveryFilter, string>> = { active: 'Active', attention: 'Needs attention' };
+/** Filters with no chip of their own, reachable by URL (?f=active); shown as a removable chip. */
+const HEADER_FILTERS: Partial<Record<DeliveryFilter, string>> = { active: 'Active' };
 
 export const DELIVERY_FILTERS = new Set<DeliveryFilter>(['active', 'attention', ...CHIPS.map(([k]) => k)]);
 
@@ -66,8 +68,6 @@ interface Props {
   onAssign: (deliveryId: string, truckId: string) => void;
   onCreating: (open: boolean) => void;
   onCreated: (r: CreateDeliveryResponse) => void;
-  onAskDelivery: (id: string) => void;
-  onAskTruck: (id: string) => void;
 }
 
 export function DeliveryList(p: Props) {
@@ -134,19 +134,25 @@ export function DeliveryList(p: Props) {
   const truckChip = p.truckSel ? (T.get(p.truckSel)?.plate_number ?? 'Unknown truck') : null;
   const headerChip = HEADER_FILTERS[p.filter];
 
+  // The form takes the pane's place while it's open: one scroll for the pane, none inside the form.
+  if (p.creating) {
+    return (
+      <div className="min-h-0 flex-1 overflow-auto">
+        <NewDeliveryForm config={config} onCreated={p.onCreated} onCancel={() => p.onCreating(false)} />
+      </div>
+    );
+  }
+
   return (
     <>
-      <AskBox trucks={trucks} driverName={p.driverName} config={config} now={now} onSelectTruck={p.onAskTruck} />
+      {config.agent_enabled && <AskBox />}
       <div className="flex items-center justify-between gap-2 px-3 pt-2.5">
         <h2 className="t-h3 m-0">Deliveries · {deliveries.length}</h2>
-        {!p.creating && (
-          <button type="button" onClick={() => p.onCreating(true)} className={btnPrimary}>
-            New delivery
-          </button>
-        )}
+        <button type="button" onClick={() => p.onCreating(true)} className={btnPrimary}>
+          New delivery
+        </button>
       </div>
-      {p.creating && <NewDeliveryForm config={config} onCreated={p.onCreated} onCancel={() => p.onCreating(false)} />}
-      <div role="group" aria-label="Filter deliveries" className="flex flex-wrap gap-2 border-b border-divider px-3 py-2.5">
+      <div role="group" aria-label="Filter deliveries" className="flex gap-2 overflow-x-auto border-b border-divider px-3 py-2.5 [&>*]:flex-none">
         {truckChip && (
           <button
             type="button"
@@ -165,7 +171,9 @@ export function DeliveryList(p: Props) {
         {CHIPS.map(([k, label]) => (
           <button key={k} type="button" aria-pressed={p.filter === k} onClick={() => p.onFilter(k)} className={chipCls(p.filter === k)}>
             {label}
-            <span className="t-mono-sm">{k === 'all' ? byTruck.length : byTruck.filter((d) => d.status === k).length}</span>
+            <span className="t-mono-sm">
+              {k === 'all' ? byTruck.length : k === 'attention' ? byTruck.filter((d) => p.attentionIds.has(d.id)).length : byTruck.filter((d) => d.status === k).length}
+            </span>
           </button>
         ))}
       </div>

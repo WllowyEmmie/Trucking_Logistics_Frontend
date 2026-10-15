@@ -33,6 +33,9 @@ export interface DriverStop {
   done: boolean;
   /** The arrive or complete for this stop is still waiting in the queue. */
   unsent: boolean;
+  /** The site contact for this stop, when one was given; otherwise the delivery's customer is who to call. */
+  contactName: string | null;
+  contactPhone: string | null;
 }
 
 /** Kept on the phone per delivery: when the driver confirmed each step, quick messages, POD. */
@@ -264,6 +267,9 @@ export function DriverProvider({ children }: { children: ReactNode }) {
         arrived: done || s.status === 'arrived' || !!p.arrived[s.sequence],
         done,
         unsent: unsent.has(s.sequence),
+        // `?? null`: a detail cached before the API returned contacts has no such fields.
+        contactName: s.contact_name ?? null,
+        contactPhone: s.contact_phone ?? null,
       };
     });
   }, [active, detail, progressFor, queue.items]);

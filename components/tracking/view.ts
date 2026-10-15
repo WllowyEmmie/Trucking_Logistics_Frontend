@@ -14,8 +14,8 @@ export interface TimelineStop {
   label: string;
   main: string;
   time: string;
+  /** The only drop-off on a single-drop delivery: labelled "Your drop-off". */
   mine: boolean;
-  other: boolean;
 }
 
 export interface Notice {
@@ -97,20 +97,18 @@ export function buildTrackingView(d: TrackResponse, opts: TrackingOpts): Trackin
   const { now, viewerTz } = opts;
   const op = opts.operator;
   const t = (iso: string) => formatTime(iso, viewerTz);
+  // Every stop on a delivery belongs to the customer holding the link, so all of them are shown.
   const drops = d.stops.filter((s) => s.stop_type === 'dropoff');
-  // Privacy: the response doesn't say which stop belongs to this link (TODO(track-privacy)).
-  // With one drop-off it can only be the viewer's; with several, no drop-off address or pin is shown.
   const multi = drops.length > 1;
   const mine = multi ? null : (drops[0] ?? null);
-  const pickup = d.stops.find((s) => s.stop_type === 'pickup');
+  // Where the truck is heading next: distance and "arrived" follow it.
+  const nextDrop = drops.find((s) => !stopDone(s)) ?? null;
   const truckPos: LatLng | null = d.truck_lat != null && d.truck_lng != null ? { lat: d.truck_lat, lng: d.truck_lng } : null;
   const live = d.status === 'in_transit' || d.status === 'assigned';
   const seenMin = d.truck_seen_at ? minutesSince(d.truck_seen_at, now) : null;
   const stale = d.status === 'in_transit' && seenMin != null && seenMin >= opts.staleMinutes;
   const state: TrackViewState = stale ? 'stale' : d.status;
-  // The plate is only in the note of the `assigned` event ("assigned to KF-12").
-  const assignedNote = [...d.events].reverse().find((e) => e.event_type === 'assigned')?.note ?? null;
-  const plate = assignedNote ? assignedNote.replace(/^assigned to /i, '') : null;
+  const plate = d.plate_number;
 
   const diffZone = zonesDiffer(viewerTz, opts.operatorTz, new Date(now));
   const viewerAbbr = tzAbbr(viewerTz, new Date(now));
@@ -118,7 +116,8 @@ export function buildTrackingView(d: TrackResponse, opts: TrackingOpts): Trackin
     ? `Times are in your time zone (${viewerAbbr}). ${op} works in ${tzAbbr(opts.operatorTz, new Date(now))}, ${describeOffset(viewerTz, opts.operatorTz, new Date(now))}.`
     : `Times are in your time zone (${viewerAbbr}).`;
 
-  const distKm = truckPos && mine && hasLatLng(mine) ? haversineKm(truckPos, mine) : null;
+  const distKm = truckPos && nextDrop && hasLatLng(nextDrop) ? haversineKm(truckPos, nextDrop) : null;
+  const distLabel = multi && nextDrop ? `Distance to the next drop-off (stop ${nextDrop.sequence})` : 'Distance to your drop-off';
   const goods = d.goods_desc ? [{ k: 'Goods', v: d.goods_desc }] : [];
   const booked = { k: 'Booked', v: formatWhen(d.created_at, viewerTz, undefined, new Date(now)) };
   const truckFact = { k: 'Truck', v: plate ?? 'Assigned' };
@@ -139,12 +138,12 @@ export function buildTrackingView(d: TrackResponse, opts: TrackingOpts): Trackin
 
   switch (state) {
     case 'in_transit': {
-      const here = mine?.status === 'arrived';
+      const here = nextDrop?.status === 'arrived' && nextDrop.arrived_at ? nextDrop : null;
       headline = here ? 'The truck has arrived' : 'On the way to you';
-      sub = here ? `Arrived at ${t(mine!.arrived_at!)}. The driver is unloading.` : progressSub;
+      sub = here ? `Arrived${multi ? ` at stop ${here.sequence}` : ''} at ${t(here.arrived_at!)}. The driver is unloading.` : progressSub;
       updated = `Updated ${d.truck_seen_at ? formatAgo(d.truck_seen_at, now) : formatAgo(new Date(opts.checkedAt).toISOString(), now)} · refreshes on its own`;
       // TODO(eta-api): no ETA in the API; distance is the best signal there is.
-      if (!here) eta = distEta('Distance to your drop-off');
+      if (!here) eta = distEta(distLabel);
       facts = [...goods, truckFact, booked];
       break;
     }
@@ -175,7 +174,7 @@ export function buildTrackingView(d: TrackResponse, opts: TrackingOpts): Trackin
       headline = 'Truck assigned';
       sub = `${plate ? `Truck ${plate}` : 'A truck'} will collect your goods. It hasn't set off yet.`;
       updated = `Updated ${formatAgo(new Date(opts.checkedAt).toISOString(), now)} · refreshes on its own`;
-      facts = [...goods, truckFact, ...(distKm != null ? [{ k: 'Distance to your drop-off', v: formatDistance(distKm, opts.units) }] : []), booked];
+      facts = [...goods, truckFact, ...(distKm != null ? [{ k: distLabel, v: formatDistance(distKm, opts.units) }] : []), booked];
       break;
     }
     case 'completed': {
@@ -217,7 +216,6 @@ export function buildTrackingView(d: TrackResponse, opts: TrackingOpts): Trackin
   const firstOpen = d.stops.find((s) => !stopDone(s));
   const stops: TimelineStop[] = d.stops.map((s) => {
     const isPickup = s.stop_type === 'pickup';
-    const hidden = !isPickup && multi;
     let dot: StopDot;
     if (d.status === 'cancelled') dot = 'cancelled';
     else if (s.status === 'completed') dot = 'done';
@@ -233,10 +231,9 @@ export function buildTrackingView(d: TrackResponse, opts: TrackingOpts): Trackin
       key: s.sequence,
       dot,
       label: `Stop ${s.sequence} · ${isPickup ? 'Pickup' : s === mine ? 'Your drop-off' : 'Drop-off'}`,
-      main: hidden ? 'A drop-off on this delivery' : s.address,
+      main: s.address,
       time,
       mine: s === mine,
-      other: hidden,
     };
   });
 
@@ -244,12 +241,12 @@ export function buildTrackingView(d: TrackResponse, opts: TrackingOpts): Trackin
   const history = [...d.events]
     .reverse()
     .flatMap((e, i) => {
-      const text = customerEventText(e);
+      const text = customerEventText(e, plate);
       return text ? [{ key: `${e.created_at}-${i}`, t: formatWhen(e.created_at, viewerTz, undefined, new Date(now)), text }] : [];
     });
 
-  // Map: pickup, the viewer's drop-off when it's known, and the truck while it's live.
-  const shown = d.stops.filter((s) => (s.stop_type === 'pickup' || !multi) && hasLatLng(s)) as (TrackStop & LatLng)[];
+  // Map: every stop with a position, and the truck while it's live.
+  const shown = d.stops.filter(hasLatLng) as (TrackStop & LatLng)[];
   const showTruck = live && truckPos != null;
   const trucks: MapTruck[] = showTruck
     ? [

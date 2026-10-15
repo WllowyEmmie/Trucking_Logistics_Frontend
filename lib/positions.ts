@@ -38,14 +38,24 @@ type Fix = Pick<Truck, 'lat' | 'lng' | 'last_seen_at'>;
 const fixes = new Map<string, Fix>();
 let socket: WebSocket | null = null;
 let users = 0;
-let live = false;
+/**
+ * `connecting` until the first open or close, `live` while the socket is open, `down` once it has
+ * closed or failed (reconnecting with backoff). Only `down` should look stale: `connecting` is page load.
+ */
+export type PositionsStatus = 'connecting' | 'live' | 'down';
+let status: PositionsStatus = 'connecting';
 let retry: ReturnType<typeof setTimeout> | null = null;
 let backoff = 1_000;
+let backstop: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Set<() => void>();
 
-function setLive(v: boolean) {
-  if (live === v) return;
-  live = v;
+/** GET /trucks while the socket is live (statuses aren't pushed), and while it's down (positions too). */
+const BACKSTOP_LIVE_MS = 30_000;
+const BACKSTOP_DOWN_MS = 10_000;
+
+function setStatus(v: PositionsStatus) {
+  if (status === v) return;
+  status = v;
   listeners.forEach((l) => l());
 }
 const subscribe = (l: () => void) => {
@@ -99,14 +109,20 @@ function connect(qc: QueryClient) {
   }
   socket = ws;
   ws.onopen = () => {
+    // Back after a drop: the snapshot brings positions up to date, and statuses come from a refetch.
+    if (status === 'down') void qc.invalidateQueries({ queryKey: TRUCKS_KEY });
     backoff = 1_000;
-    setLive(true);
+    setStatus('live');
   };
   ws.onmessage = (e) => onMessage(qc, e.data);
   ws.onclose = () => {
     if (socket !== ws) return; // closed by release()
     socket = null;
-    setLive(false);
+    setStatus('down');
+    // Positions now come only from /trucks: poll at the faster rate from here on.
+    if (backstop) clearTimeout(backstop);
+    backstop = null;
+    scheduleBackstop(qc);
     schedule(qc);
   };
 }
@@ -120,14 +136,33 @@ function schedule(qc: QueryClient) {
   backoff = Math.min(backoff * 2, 30_000);
 }
 
+/**
+ * Refetches /trucks on its own timer. Not TanStack's refetchInterval: every setQueryData from the
+ * socket restarts that timer, so with trucks moving it would never fire. Skipped while the tab is
+ * hidden; TanStack refetches on focus.
+ */
+function scheduleBackstop(qc: QueryClient) {
+  if (backstop || users === 0) return;
+  backstop = setTimeout(
+    () => {
+      backstop = null;
+      if (document.visibilityState === 'visible') void qc.refetchQueries({ queryKey: TRUCKS_KEY, type: 'active' });
+      scheduleBackstop(qc);
+    },
+    status === 'live' ? BACKSTOP_LIVE_MS : BACKSTOP_DOWN_MS,
+  );
+}
+
 function release() {
   if (--users > 0) return;
   if (retry) clearTimeout(retry);
   retry = null;
+  if (backstop) clearTimeout(backstop);
+  backstop = null;
   const ws = socket;
   socket = null;
   ws?.close();
-  setLive(false);
+  setStatus('connecting');
 }
 
 /**
@@ -135,26 +170,25 @@ function release() {
  *
  * Positions come over the socket. GET /trucks gives everything else (plate, model, driver, status)
  * and is refetched every 30 s while the socket is up, because the API doesn't push status changes.
- * With the socket down it polls every 10 s instead, and reconnects with backoff (1 s up to 30 s).
+ * With the socket down it's every 10 s instead, and the socket reconnects with backoff (1 s up to 30 s).
  */
 export function usePositions() {
   const qc = useQueryClient();
-  const isLive = usePositionsLive();
 
   useEffect(() => {
     users++;
     connect(qc);
+    scheduleBackstop(qc);
     return release;
   }, [qc]);
 
   return useQuery({
     queryKey: TRUCKS_KEY,
     queryFn: async () => (await api<Truck[]>('/trucks')).map(withFix),
-    refetchInterval: isLive ? 30_000 : 10_000,
   });
 }
 
-/** Whether positions are arriving live over the socket rather than by polling. */
-export function usePositionsLive(): boolean {
-  return useSyncExternalStore(subscribe, () => live, () => false);
+/** Whether positions are arriving live over the socket, and if not, whether it has dropped. */
+export function usePositionsStatus(): PositionsStatus {
+  return useSyncExternalStore(subscribe, () => status, () => 'connecting');
 }

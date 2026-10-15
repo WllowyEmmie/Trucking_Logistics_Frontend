@@ -89,14 +89,27 @@ export default function DispatchMap(p: DispatchMapProps) {
         <AutoResize el={wrap} />
       </MapContainer>
 
+      {p.alert && (
+        <div
+          role="status"
+          className={`${overlayBox} start-3 end-3 top-3 max-w-max px-3 py-2 text-[14px] leading-5 font-semibold`}
+          style={{ borderColor: 'var(--attention)', borderWidth: 2 }}
+        >
+          {p.alert}
+        </div>
+      )}
       {p.note && (
-        <div role="status" className={`${overlayBox} start-3 end-3 top-3 max-w-max px-3 py-2 text-[14px] leading-5 font-semibold`}>
+        <div
+          role="status"
+          className={`${overlayBox} start-3 end-3 max-w-max px-3 py-2 text-[14px] leading-5 font-semibold`}
+          style={{ top: p.alert ? 60 : 12 }}
+        >
           {p.note}
         </div>
       )}
 
       {p.controls && map && (
-        <div className="absolute end-3 top-3 z-[1000] flex flex-col gap-2" style={p.note ? { top: 60 } : undefined}>
+        <div className="absolute end-3 top-3 z-[1000] flex flex-col gap-2" style={{ top: 12 + 48 * (Number(!!p.note) + Number(!!p.alert)) }}>
           {(
             [
               ['+', 'Zoom in', () => map.zoomIn()],

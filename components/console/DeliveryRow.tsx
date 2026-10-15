@@ -1,4 +1,5 @@
 import { ChevronDown, TriangleAlert } from 'lucide-react';
+import { useState } from 'react';
 import { StatusPill } from '@/components/StatusPill';
 import type { AppConfig } from '@/lib/config';
 import { currentStopIndex, eventText } from '@/lib/deliveries';
@@ -40,6 +41,10 @@ export function DeliveryRow(p: Props) {
   const tz = config.timezone;
   const t = (iso: string) => formatTime(iso, tz, config.locale);
   const live = d.status === 'in_transit' || d.status === 'assigned';
+  // On a pending delivery the job is assigning: the details wait behind a toggle so the assign
+  // panel isn't pushed out of the (short) list pane. Other statuses show them straight away.
+  const [showDetails, setShowDetails] = useState(d.status !== 'pending');
+  const details = showDetails || d.status !== 'pending';
   const stops = detail?.stops ?? [];
   const cur = currentStopIndex(stops);
   // Events come oldest first; the row shows newest first.
@@ -125,7 +130,19 @@ export function DeliveryRow(p: Props) {
             </div>
           )}
 
-          {detail && (
+          {detail && d.status === 'pending' && (
+            <button
+              type="button"
+              aria-expanded={details}
+              onClick={() => setShowDetails((v) => !v)}
+              className="flex min-h-11 items-center gap-1.5 self-start rounded-md border border-border bg-surface-100 px-3 text-[13px] font-semibold text-ink"
+            >
+              <ChevronDown size={16} strokeWidth={2.5} aria-hidden="true" style={{ transform: details ? 'rotate(180deg)' : 'none' }} />
+              {details ? 'Hide details' : 'Details · stops, customer link, events'}
+            </button>
+          )}
+
+          {detail && details && (
             <dl className="t-body-sm m-0 grid gap-x-3 gap-y-1" style={{ gridTemplateColumns: 'auto minmax(0,1fr)' }}>
               {detail.delivery.customer_phone && (
                 <>
@@ -148,7 +165,7 @@ export function DeliveryRow(p: Props) {
             </dl>
           )}
 
-          {stops.length > 0 && (
+          {details && stops.length > 0 && (
             <div className="flex flex-col gap-2">
               <span className="t-label text-ink-muted">Stops</span>
               <ol className="m-0 list-none p-0">
@@ -193,7 +210,7 @@ export function DeliveryRow(p: Props) {
             </div>
           )}
 
-          {events.length > 0 && (
+          {details && events.length > 0 && (
             <div className="flex flex-col gap-1">
               <span className="t-label text-ink-muted">Events</span>
               <ol className="m-0 list-none p-0">

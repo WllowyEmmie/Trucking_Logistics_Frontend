@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const LINKS = [
   ['/console', 'Console'],
@@ -11,7 +12,7 @@ export type DispatchPage = (typeof LINKS)[number][0];
 /** Console · Fleet · Settings. The current page has an ink fill. */
 export function DispatchNav({ current }: { current: DispatchPage }) {
   return (
-    <nav aria-label="Dispatch" className="flex flex-wrap gap-1">
+    <nav aria-label="Dispatch" className="flex flex-wrap items-center gap-1">
       {LINKS.map(([href, label]) => {
         const on = href === current;
         return (
@@ -27,6 +28,7 @@ export function DispatchNav({ current }: { current: DispatchPage }) {
           </Link>
         );
       })}
+      <ThemeToggle />
     </nav>
   );
 }

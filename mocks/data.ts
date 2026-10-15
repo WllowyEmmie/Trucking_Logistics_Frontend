@@ -13,6 +13,7 @@ import type {
   DeliveryStatus,
   Driver,
   LocationPing,
+  Proposal,
   Stop,
   StopKind,
   StopStatus,
@@ -65,6 +66,9 @@ const PLACES: Place[] = [
   { addr: '22 Bridge Rd, Rothwell LS26 0EN', lat: 53.748, lng: -1.478 },
   { addr: 'Northgate Community Hall, Northgate, Otley LS21 1AA', lat: 53.906, lng: -1.693 },
 ];
+
+/** Who's on site at a drop-off: not the customer who booked it. */
+const SITE_CONTACTS = ['Gate office', 'Joe Pritchard (site manager)', 'Goods-in desk', 'Sarah Lowe', 'Reception'];
 
 const DRIVERS = ['Amaka Obi', 'Dele Harrow', 'Priya Nair', 'Tomasz Wójcik', 'Siobhan Kelly', 'Yusuf Demir', 'Grace Mensah', 'Liam Walsh', 'Chen Wei', 'Marta Silva', 'Kwame Asante', 'Hannah Brooks', 'Imran Qureshi', 'Zofia Nowak', 'Oluwaseun Adeyemi', 'Farah Haddad', 'Ben Carter', 'Aisha Bello', 'Ines Moreau', 'Megan Price', 'Dmitri Volkov', 'Leila Ahmadi', 'Sam Whitaker', 'Ruth Ellis', 'Callum Reid', 'Rui Costa', 'Jonas Berg', 'Nadia Rahman', 'Arjun Mehta', 'Chloe Dunn'];
 const CUSTOMERS = ['Ferreira Building Supplies', 'Harrow & Sons Timber', 'Northgate Community Hall', 'Bramley Tile Centre', 'Oakwood Garden Supplies', 'Calder Plumbing Merchants', 'Kirkstall Brewery Co.', 'Moortown Pharmacy', 'Headingley Cycle Works', 'Pudsey Print Studio', 'Rothwell Electrical Wholesale', 'Seacroft Food Bank', 'Chapel Allerton Deli', 'Garforth Joinery', 'Horsforth Flooring', 'Aire Valley Kitchens', 'Morley Paint & Decor', 'Wetherby Farm Shop', 'Otley Hardware', 'Shipley Glass & Glazing', 'Batley Carpet Warehouse', 'Yeadon Aero Parts', 'Leeds Dental Lab', 'Hunslet Motor Factors', 'Armley Bakery', 'Beeston Printworks', 'Roundhay Florist', 'Meanwood Valley Farm', 'Crossgates Hardware', 'Castleford Wholesale Foods', 'Pontefract Office Supplies', 'Ossett Architectural Salvage', 'Ilkley Lido Café'];
@@ -128,9 +132,6 @@ interface MDelivery {
 
 interface MStop extends Stop {
   delivery_id: string;
-  /** Stored on create, not returned by any endpoint (as in the API). */
-  contact_name: string | null;
-  contact_phone: string | null;
 }
 
 interface MEvent extends DeliveryEvent {
@@ -144,6 +145,7 @@ interface Db {
   deliveries: MDelivery[];
   stops: MStop[];
   events: MEvent[];
+  proposals: Proposal[];
   refSeq: number;
   eventSeq: number;
   uuid: () => string;
@@ -182,7 +184,7 @@ function seed(): Db {
     max_lng: -1.0,
   };
   const pingMs = THRESHOLDS.ping_seconds * 1000;
-  const db: Db = { config, trucks: [], drivers: [], deliveries: [], stops: [], events: [], refSeq: 10001, eventSeq: 1, uuid, tokenRng: rng(99) };
+  const db: Db = { config, trucks: [], drivers: [], deliveries: [], stops: [], events: [], proposals: [], refSeq: 10001, eventSeq: 1, uuid, tokenRng: rng(99) };
 
   db.drivers = DRIVERS.map((name, i) => ({ id: uuid(), name, phone: `+44 7700 900${String(100 + i * 7).slice(-3)}`, created_at: iso(now0 - 90 * 24 * 60 * MIN) }));
   db.trucks = Array.from({ length: 32 }, (_, i) => ({
@@ -231,8 +233,9 @@ function seed(): Db {
         status: 'pending',
         arrived_at: null,
         completed_at: null,
-        contact_name: k === 0 ? null : customer,
-        contact_phone: k === 0 ? null : d.customer_phone,
+        // Most drop-offs have a site contact; every third falls back to the customer.
+        contact_name: k === 0 || k % 3 === 0 ? null : SITE_CONTACTS[(db.refSeq + k) % SITE_CONTACTS.length]!,
+        contact_phone: k === 0 || k % 3 === 0 ? null : `+44 7700 900${String(500 + db.refSeq + k).slice(-3)}`,
       }),
     );
     addEvent(d.id, 'created', created);
@@ -333,6 +336,43 @@ function seed(): Db {
   });
 
   db.events.sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+
+  // Agent proposals, as the agent would POST them: one change (an assign) and one flag.
+  const oldest = [...db.deliveries].filter((d) => d.status === 'pending').sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))[0];
+  const free = db.trucks[22]!; // KF-23, available
+  if (oldest) {
+    db.proposals.push({
+      id: uuid(),
+      kind: 'change',
+      status: 'pending',
+      title: `Assign ${free.plate_number} to ${oldest.reference}`,
+      why: `${oldest.reference} has waited over two hours and ${free.plate_number} is the nearest available truck to its pickup.`,
+      delivery_id: oldest.id,
+      truck_id: free.id,
+      action: { type: 'assign', delivery_id: oldest.id, truck_id: free.id },
+      changes: [{ k: 'Truck', from: 'unassigned', to: free.plate_number }],
+      created_at: iso(now0 - 6 * MIN),
+      decided_at: null,
+      decided_by: null,
+    });
+  }
+  const flagged = db.deliveries.find((d) => d.status === 'in_transit' && d.truck_id === db.trucks[6]!.id);
+  if (flagged) {
+    db.proposals.push({
+      id: uuid(),
+      kind: 'flag',
+      status: 'pending',
+      title: 'Driver stopped away from a stop',
+      why: `${db.trucks[6]!.plate_number} has been stationary for 12 minutes, 2 km from its next drop-off.`,
+      delivery_id: flagged.id,
+      truck_id: db.trucks[6]!.id,
+      action: null,
+      changes: [],
+      created_at: iso(now0 - 3 * MIN),
+      decided_at: null,
+      decided_by: null,
+    });
+  }
   return db;
 }
 
@@ -403,19 +443,8 @@ const truckOut = (t: MTruck): Truck => ({
   lat: t.lat,
   last_seen_at: t.last_seen_at,
 });
-const stopOut = ({ id, sequence, stop_type, address, lng, lat, status, arrived_at, completed_at }: MStop): Stop => ({
-  id,
-  sequence,
-  stop_type,
-  address,
-  lng,
-  lat,
-  status,
-  arrived_at,
-  completed_at,
-});
-/** ListEventsForDelivery doesn't select stop_id (TODO(events-stop-id) in lib/types.ts). */
-const eventOut = ({ id, event_type, note, created_at }: MEvent): DeliveryEvent => ({ id, event_type, note, created_at });
+const stopOut = ({ delivery_id: _d, ...s }: MStop): Stop => s;
+const eventOut = ({ id, event_type, stop_id, note, created_at }: MEvent): DeliveryEvent => ({ id, event_type, stop_id, note, created_at });
 const listItem = (d: MDelivery): DeliveryListItem => ({
   id: d.id,
   reference: d.reference,
@@ -442,12 +471,21 @@ function truckById(id: string | undefined, notFound = 'truck not found'): MTruck
 }
 const inArea = (c: Config, lat: number, lng: number) => lat >= c.min_lat && lat <= c.max_lat && lng >= c.min_lng && lng <= c.max_lng;
 
-/** Ends a delivery's truck run: the truck must be on delivery, and becomes available. */
-function releaseTruck(d: MDelivery) {
+/** Ends a delivery's truck run: the truck must be on delivery, and becomes available (or goes to maintenance). */
+function releaseTruck(d: MDelivery, next: 'available' | 'maintenance' = 'available') {
   if (!d.truck_id) throw new MockError(409, 'delivery has no truck assigned');
   const t = truckById(d.truck_id);
   if (t.status !== 'on_delivery') throw new MockError(409, `truck ${t.plate_number} is ${t.status}`);
-  Object.assign(t, { status: 'available', sim: null });
+  Object.assign(t, { status: next, sim: null });
+}
+
+/** A pending proposal, or the API's 400/404/409. */
+function proposalById(id: string): Proposal {
+  if (!UUID_RE.test(id)) throw new MockError(400, 'invalid proposal id');
+  const p = getDb().proposals.find((x) => x.id === id);
+  if (!p) throw new MockError(404, 'proposal not found');
+  if (p.status !== 'pending') throw new MockError(409, `proposal is already ${p.status}`);
+  return p;
 }
 
 const VALID_STATUSES = new Set(['pending', 'assigned', 'in_transit', 'completed', 'cancelled', 'failed']);
@@ -662,9 +700,13 @@ export const mock = {
     if (!reason || !VALID_REASONS.has(reason))
       throw new MockError(400, 'reason must be one of: breakdown, customer_unavailable, goods_damaged, accident, other');
     if (d.status !== 'in_transit') throw new MockError(409, `delivery is ${d.status} and cannot be marked failed`);
-    releaseTruck(d);
+    // A breakdown or an accident sends the truck to the workshop, as its own event after `failed`.
+    const workshop = reason === 'breakdown' || reason === 'accident';
+    releaseTruck(d, workshop ? 'maintenance' : 'available');
     d.status = 'failed';
-    addEv(db_, d.id, 'failed', Date.now(), reason);
+    const now = Date.now();
+    addEv(db_, d.id, 'failed', now, reason);
+    if (workshop) addEv(db_, d.id, 'truck_maintenance', now);
     return { delivery: rowOut(d), reason };
   },
 
@@ -677,6 +719,81 @@ export const mock = {
     d.truck_id = null;
     addEv(db_, d.id, 'cancelled', Date.now());
     return rowOut(d);
+  },
+
+  /** GET /geocode?q= (internal/api/geocode.go): the mock's own places, matched on every word. */
+  geocode(q: string | null) {
+    const text = (q ?? '').trim();
+    if (text.length < 3 || text.length > 200) throw new MockError(400, 'q must be 3 to 200 characters');
+    const words = text.toLowerCase().split(/\s+/);
+    return [DEPOT, ...PLACES]
+      .filter((p) => words.every((w) => p.addr.toLowerCase().includes(w)))
+      .slice(0, 5)
+      .map((p) => ({ label: p.addr, lat: p.lat, lng: p.lng }));
+  },
+
+  // ---- Proposals (internal/api/proposal.go) ----
+
+  proposals(status: string | null) {
+    const s = status || 'pending';
+    if (!['pending', 'approved', 'rejected', 'expired'].includes(s)) throw new MockError(400, 'invalid proposal status');
+    return getDb()
+      .proposals.filter((p) => p.status === s)
+      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  },
+
+  createProposal(body: Partial<Omit<Proposal, 'action'>> & { action?: unknown }) {
+    const db_ = getDb();
+    if (body.kind !== 'change' && body.kind !== 'flag') throw new MockError(400, 'kind must be change or flag');
+    if (!body.title) throw new MockError(400, 'title is required');
+    if (!body.why) throw new MockError(400, 'why is required — a proposal without reasoning cannot be judged');
+    const hasAction = body.action != null;
+    if (body.kind === 'change' && !hasAction) throw new MockError(400, 'a change proposal needs an action');
+    if (body.kind === 'flag' && hasAction) throw new MockError(400, 'a flag has nothing to execute and must not carry an action');
+    const act = body.action as Proposal['action'];
+    if (act) {
+      if (act.type !== 'assign') throw new MockError(400, 'action type must be assign');
+      if (!UUID_RE.test(act.delivery_id ?? '')) throw new MockError(400, 'action.delivery_id must be a uuid');
+      if (!UUID_RE.test(act.truck_id ?? '')) throw new MockError(400, 'action.truck_id must be a uuid');
+    }
+    if (body.delivery_id && !UUID_RE.test(body.delivery_id)) throw new MockError(400, 'invalid delivery id');
+    if (body.truck_id && !UUID_RE.test(body.truck_id)) throw new MockError(400, 'invalid truck id');
+    if ((body.delivery_id && !db_.deliveries.some((d) => d.id === body.delivery_id)) || (body.truck_id && !db_.trucks.some((t) => t.id === body.truck_id)))
+      throw new MockError(404, 'the delivery or truck this proposal refers to does not exist');
+    const p: Proposal = {
+      id: db_.uuid(),
+      kind: body.kind,
+      status: 'pending',
+      title: body.title,
+      why: body.why,
+      delivery_id: body.delivery_id || null,
+      truck_id: body.truck_id || null,
+      action: act ?? null,
+      changes: body.changes ?? [],
+      created_at: iso(Date.now()),
+      decided_at: null,
+      decided_by: null,
+    };
+    db_.proposals.push(p);
+    return p;
+  },
+
+  /** Runs the action through the same rules as /assign. A 409 there means the proposal went stale: it expires. */
+  approveProposal(id: string) {
+    const p = proposalById(id);
+    if (p.kind !== 'change' || !p.action) throw new MockError(409, 'a flag has nothing to approve');
+    try {
+      mock.assign(p.action.delivery_id, p.action.truck_id);
+    } catch (e) {
+      if (e instanceof MockError && e.status === 409) Object.assign(p, { status: 'expired', decided_at: iso(Date.now()), decided_by: `system: ${e.message}` });
+      throw e;
+    }
+    return Object.assign(p, { status: 'approved', decided_at: iso(Date.now()), decided_by: 'dispatcher' });
+  },
+
+  rejectProposal(id: string) {
+    const p = proposalById(id);
+    return Object.assign(p, { status: 'rejected', decided_at: iso(Date.now()), decided_by: 'dispatcher' });
   },
 
   /** POST /deliveries/{id}/stops/{stopId}/arrive|complete: in order, while in transit. */
@@ -734,6 +851,7 @@ export const mock = {
     return {
       reference: d.reference,
       status: d.status,
+      plate_number: t?.plate_number ?? null,
       customer_name: d.customer_name,
       goods_desc: d.goods_desc,
       created_at: d.created_at,
@@ -744,11 +862,8 @@ export const mock = {
         .filter((s) => s.delivery_id === d.id)
         .sort((a, b) => a.sequence - b.sequence)
         .map(({ sequence, stop_type, address, lng, lat, status, arrived_at }) => ({ sequence, stop_type, address, lng, lat, status, arrived_at })),
-      // The API's TrackingEvent has no id, though TrackResponse types events as DeliveryEvent.
-      // Sent as the server sends it; the tracking page doesn't read `id`.
-      events: db_.events
-        .filter((e) => e.delivery_id === d.id)
-        .map(({ event_type, note, created_at }) => ({ event_type, note, created_at }) as DeliveryEvent),
+      // TrackingEvent: no id, no stop_id.
+      events: db_.events.filter((e) => e.delivery_id === d.id).map(({ event_type, note, created_at }) => ({ event_type, note, created_at })),
     };
   },
 };

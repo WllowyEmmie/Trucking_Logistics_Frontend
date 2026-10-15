@@ -16,6 +16,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Thin, themed scrollbars everywhere: the browser default is a wide grey bar in both themes.
+   --border meets 3:1 against the surfaces in light and dark. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
 /* `.dark` sits on <body> (see providers.tsx): body must cover the viewport so <html> never shows. */
 body {
   min-height: 100dvh;

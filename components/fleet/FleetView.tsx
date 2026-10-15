@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { DispatchNav } from '@/components/console/DispatchNav';
 import { StatusPill } from '@/components/StatusPill';
 import { useConfig } from '@/lib/config';
@@ -10,10 +10,11 @@ import { TRUCKS_KEY, usePositions } from '@/lib/positions';
 import type { Driver, Truck } from '@/lib/types';
 import { AddDriverForm } from './AddDriverForm';
 import { AddTruckForm } from './AddTruckForm';
+import { TruckEdit } from './TruckEdit';
 
 type Tab = 'trucks' | 'drivers';
 
-const TRUCK_COLS = 'minmax(90px,.7fr) minmax(0,1.6fr) minmax(110px,.8fr) minmax(0,1fr)';
+const TRUCK_COLS = 'minmax(90px,.7fr) minmax(0,1.4fr) minmax(110px,.8fr) minmax(0,1fr) 72px';
 const DRIVER_COLS = 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr)';
 
 const NOTES: Record<Tab, string[]> = {
@@ -21,12 +22,13 @@ const NOTES: Record<Tab, string[]> = {
     'Plate is the only required field and matches POST /trucks. Duplicates come back as 409 and are shown word for word.',
     'Model is optional in the API and helps dispatchers tell vans from rigids at a glance.',
     '"Starts as" avoids a new truck showing as Available before it has passed its checks. In maintenance is set with PATCH /trucks/{id} right after it is added.',
+    'Edit a truck to bring it back from maintenance (a breakdown or accident puts it there), take it offline, or change its usual driver. A truck on a delivery keeps its status until the delivery ends.',
     'Payload and pallet spaces need new fields on /trucks.',
   ],
   drivers: [
     'Name and phone are required and match POST /drivers. A phone already on file comes back as 409.',
     'Phone is stored in international format so dispatch can call from anywhere.',
-    "Usual truck is the truck's driver_id, set with PATCH /trucks/{id} once the driver is added. Only trucks with no usual driver are offered.",
+    "Usual truck is the truck's driver_id, set with PATCH /trucks/{id} once the driver is added. Only trucks with no usual driver are offered; change it later from the truck's Edit.",
     'Texting the driver a link to the app needs a backend endpoint.',
   ],
 };
@@ -35,6 +37,8 @@ interface Row {
   key: string;
   fresh: boolean;
   cells: ReactNode[];
+  /** Shown under the row: the truck editor while it's open. */
+  below?: ReactNode;
 }
 
 export function FleetView() {
@@ -44,6 +48,7 @@ export function FleetView() {
   const [q, setQ] = useState('');
   // The row just added stays at the top, tinted, until the page is left.
   const [fresh, setFresh] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
 
   const trucksQ = usePositions();
   const driversQ = useDrivers();
@@ -74,7 +79,30 @@ export function FleetView() {
             <span key="d" className="t-body-sm wrap-anywhere text-ink-muted">
               {driverName(t.driver_id) ?? 'No usual driver'}
             </span>,
+            <button
+              key="e"
+              type="button"
+              aria-expanded={editing === t.id}
+              aria-label={`Edit ${t.plate_number}`}
+              onClick={() => setEditing(editing === t.id ? null : t.id)}
+              className="min-h-11 rounded-md border border-border bg-surface-100 px-3 text-[13px] font-semibold text-ink"
+            >
+              {editing === t.id ? 'Close' : 'Edit'}
+            </button>,
           ],
+          below:
+            editing === t.id ? (
+              <TruckEdit
+                truck={t}
+                drivers={drivers}
+                usualTruckOf={truckOf}
+                onSaved={(u) => {
+                  qc.setQueryData<Truck[]>(TRUCKS_KEY, (ts) => ts?.map((x) => (x.id === u.id ? { ...x, status: u.status, driver_id: u.driver_id } : x)));
+                  void qc.invalidateQueries({ queryKey: TRUCKS_KEY });
+                }}
+                onClose={() => setEditing(null)}
+              />
+            ) : undefined,
         }))
     : freshFirst(drivers, (d) => d.id)
         .filter((d) => !needle || `${d.name} ${d.phone} ${truckOf(d.id) ?? ''}`.toLowerCase().includes(needle))
@@ -101,7 +129,7 @@ export function FleetView() {
   const loadError = isT ? trucksQ.error : driversQ.error;
   const title = isT ? 'Trucks' : 'Drivers';
   const searchHint = isT ? 'Plate, model or driver' : 'Name, phone or truck';
-  const heads = isT ? ['Plate', 'Model', 'Status', 'Usual driver'] : ['Name', 'Phone', 'Usual truck'];
+  const heads = isT ? ['Plate', 'Model', 'Status', 'Usual driver', ''] : ['Name', 'Phone', 'Usual truck'];
   const cols = isT ? TRUCK_COLS : DRIVER_COLS;
 
   return (
@@ -162,26 +190,28 @@ export function FleetView() {
           </div>
           <div role="table" aria-label={title} className="scroll-pad flex max-h-[720px] flex-col overflow-auto">
             <div role="row" className="t-label sticky top-0 z-[1] grid gap-3 bg-surface-200 px-4 py-2 text-ink-muted" style={{ gridTemplateColumns: cols }}>
-              {heads.map((h) => (
-                <span key={h} role="columnheader">
-                  {h}
+              {heads.map((h, i) => (
+                <span key={i} role="columnheader">
+                  {h || <span className="sr-only">Edit</span>}
                 </span>
               ))}
             </div>
             {rows.map((r) => (
-              <div
-                key={r.key}
-                role="row"
-                className="grid min-h-[52px] items-center gap-3 border-b border-divider px-4 py-1.5"
-                style={{ gridTemplateColumns: cols, background: r.fresh ? 'var(--status-completed-bg)' : 'transparent' }}
-              >
-                {r.cells.map((c, i) => (
-                  <span key={i} role="cell" className="flex min-w-0 flex-col">
-                    {c}
-                    {i === 0 && r.fresh && <span className="t-label text-status-completed">Just added</span>}
-                  </span>
-                ))}
-              </div>
+              <Fragment key={r.key}>
+                <div
+                  role="row"
+                  className="grid min-h-[52px] items-center gap-3 border-b border-divider px-4 py-1.5"
+                  style={{ gridTemplateColumns: cols, background: r.fresh ? 'var(--status-completed-bg)' : 'transparent' }}
+                >
+                  {r.cells.map((c, i) => (
+                    <span key={i} role="cell" className="flex min-w-0 flex-col">
+                      {c}
+                      {i === 0 && r.fresh && <span className="t-label text-status-completed">Just added</span>}
+                    </span>
+                  ))}
+                </div>
+                {r.below && <div className="border-b border-divider">{r.below}</div>}
+              </Fragment>
             ))}
             {loadError && rows.length === 0 && (
               <div role="alert" className="flex flex-col items-start gap-2.5 px-4 py-6">

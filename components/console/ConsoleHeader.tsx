@@ -1,31 +1,22 @@
-import Link from 'next/link';
+'use client';
+
+import { ChevronDown } from 'lucide-react';
+import { useState } from 'react';
+import type { AppConfig } from '@/lib/config';
 import type { ExceptionRow } from '@/lib/exceptions';
 import { formatDuration } from '@/lib/format';
-import type { AppConfig } from '@/lib/config';
+import { DispatchNav } from './DispatchNav';
 import { ExceptionTable } from './ExceptionTable';
-
-export type CountKey = 'active' | 'pending' | 'attention';
-
-export interface Count {
-  key: CountKey;
-  n: number;
-  label: string;
-  /** Number colour: a token var. */
-  color: string;
-}
 
 interface Props {
   config: AppConfig;
   clock: string;
-  counts: Count[];
-  filter: string;
-  onCount: (k: CountKey) => void;
   exceptions: ExceptionRow[];
   stacked: boolean;
   onView: (x: ExceptionRow) => void;
 }
 
-const navLink = 'inline-flex min-h-11 items-center text-[14px] font-semibold';
+const OPEN_KEY = 'console-attention-open';
 
 /** The rules behind the exception table, in the operator's own thresholds. */
 function rulesLine(cfg: AppConfig): string {
@@ -39,56 +30,73 @@ function rulesLine(cfg: AppConfig): string {
   return parts.join(' · ');
 }
 
-export function ConsoleHeader({ config, clock, counts, filter, onCount, exceptions, stacked, onView }: Props) {
+/** Open or closed is a per-browser convenience; without storage it starts closed. */
+function readOpen(): boolean {
+  try {
+    return localStorage.getItem(OPEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * One row, like the Fleet and Settings headers: title, nav, and Needs attention as a button. No
+ * counts: the list's filter chips already show them, next to the list they filter. The exception table only takes space when it's opened, like the proposals
+ * pane; the count stays visible (in the attention colour) while it's closed.
+ */
+export function ConsoleHeader({ config, clock, exceptions, stacked, onView }: Props) {
+  const [open, setOpenState] = useState(readOpen);
+  const setOpen = (v: boolean) => {
+    setOpenState(v);
+    try {
+      localStorage.setItem(OPEN_KEY, v ? '1' : '0');
+    } catch {
+      // Not remembered; it still opens.
+    }
+  };
+  const n = exceptions.length;
+
   return (
-    <header
-      className="grid flex-none gap-x-6 gap-y-3 border-b border-border bg-surface-100 px-4 py-3"
-      style={{ gridTemplateColumns: stacked ? 'minmax(0,1fr)' : '360px minmax(0,1fr)' }}
-    >
-      <div className="flex min-w-0 flex-col gap-2.5">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+    <header className="flex-none border-b border-border bg-surface-100">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           <h1 className="t-h2 m-0">{config.operator_name} · Dispatch</h1>
-          <nav aria-label="Dispatch" className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <Link href="/console/fleet" className={navLink}>
-              Fleet
-            </Link>
-            <Link href="/console/settings" className={navLink}>
-              Settings
-            </Link>
-            <span className="t-mono text-ink-muted">{clock}</span>
-          </nav>
+          <DispatchNav current="/console" />
         </div>
-        <div role="group" aria-label="Fleet counts" className="grid grid-cols-3 gap-2">
-          {counts.map((c) => {
-            const on = filter === c.key;
-            return (
-              <button
-                key={c.key}
-                type="button"
-                aria-pressed={on}
-                onClick={() => onCount(c.key)}
-                className="flex min-w-0 flex-col items-start gap-0.5 rounded-md px-3 py-2 text-start text-ink"
-                style={{
-                  border: on ? '2px solid var(--ink)' : '1px solid var(--border)',
-                  background: on ? 'var(--surface-200)' : 'var(--surface-100)',
-                }}
-              >
-                <span className="t-display" style={{ color: c.color }}>
-                  {c.n}
-                </span>
-                <span className="t-label text-ink-muted">{c.label}</span>
-              </button>
-            );
-          })}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls="attention-panel"
+            onClick={() => setOpen(!open)}
+            className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-[14px] font-semibold text-ink"
+            style={{
+              border: n ? '2px solid var(--attention)' : '1px solid var(--border)',
+              background: n ? 'var(--attention-bg)' : 'var(--surface-100)',
+            }}
+          >
+            Needs attention
+            <span
+              className="min-w-6 rounded-full px-1.5 text-center font-mono text-[13px] leading-6"
+              style={{ background: n ? 'var(--attention)' : 'var(--surface-300)', color: n ? 'var(--surface-100)' : 'var(--ink)' }}
+            >
+              {n}
+            </span>
+            <ChevronDown size={16} strokeWidth={2.5} aria-hidden="true" style={{ transform: open ? 'rotate(180deg)' : 'none' }} />
+          </button>
+          <span className="t-mono ps-1 text-ink-muted">{clock}</span>
         </div>
       </div>
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <h2 className="t-h3 m-0">Needs attention · {exceptions.length}</h2>
-          <span className="t-body-sm text-ink-muted">{rulesLine(config)}</span>
+
+      {open && (
+        <div id="attention-panel" className="flex flex-col gap-1.5 border-t border-divider px-4 pt-2 pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <h2 className="t-h3 m-0">Needs attention · {n}</h2>
+            <span className="t-body-sm text-ink-muted">{rulesLine(config)}</span>
+          </div>
+          <ExceptionTable rows={exceptions} stacked={stacked} onView={onView} />
         </div>
-        <ExceptionTable rows={exceptions} stacked={stacked} onView={onView} />
-      </div>
+      )}
     </header>
   );
 }

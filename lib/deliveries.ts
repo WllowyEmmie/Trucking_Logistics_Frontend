@@ -7,7 +7,7 @@
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { api } from './api';
 import { FAIL_REASONS } from './labels';
-import type { DeliveryDetailResponse, DeliveryEvent, DeliveryListItem, Driver, FailReason, Stop } from './types';
+import type { DeliveryDetailResponse, DeliveryEvent, DeliveryListItem, Driver, FailReason, Stop, TrackEvent } from './types';
 
 export const DELIVERIES_KEY = ['deliveries'] as const;
 export const DRIVERS_KEY = ['drivers'] as const;
@@ -38,28 +38,35 @@ export function useDrivers() {
 // ---- Events ----
 
 /** The latest event of a type: when the delivery started, ended, failed… */
-export function eventAt(events: DeliveryEvent[], type: string): string | null {
+export function eventAt(events: TrackEvent[], type: string): string | null {
   for (let i = events.length - 1; i >= 0; i--) if (events[i]!.event_type === type) return events[i]!.created_at;
   return null;
 }
 
-/** The failure reason lives in the note of the `failed` event. */
-export function failReasonOf(events: DeliveryEvent[]): FailReason | null {
-  const e = [...events].reverse().find((x) => x.event_type === 'failed');
-  const r = e?.note?.trim();
+/** A `failed` event's note is the bare reason. Anything unrecognised reads as 'other'. */
+const reasonKey = (note: string | null): FailReason | null => {
+  const r = note?.trim();
   return r && FAIL_REASONS.some((x) => x.key === r) ? (r as FailReason) : r ? 'other' : null;
+};
+
+/** The failure reason lives in the note of the `failed` event. */
+export function failReasonOf(events: TrackEvent[]): FailReason | null {
+  return reasonKey([...events].reverse().find((x) => x.event_type === 'failed')?.note ?? null);
 }
 
 /** When the delivery ended (completed, failed or cancelled), from its events. */
-export function endedAt(events: DeliveryEvent[]): string | null {
+export function endedAt(events: TrackEvent[]): string | null {
   return eventAt(events, 'completed') ?? eventAt(events, 'failed') ?? eventAt(events, 'cancelled');
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const reasonLabel = (note: string | null) => FAIL_REASONS.find((r) => r.key === note)?.label.toLowerCase() ?? note ?? 'reason not given';
+const reasonLabel = (note: string | null) => {
+  const k = reasonKey(note);
+  return k ? (FAIL_REASONS.find((r) => r.key === k)?.label.toLowerCase() ?? k) : 'reason not given';
+};
 
+/** The stop an event belongs to, from its stop_id; "a stop" only if the stops aren't loaded. */
 function stopLabel(e: DeliveryEvent, stops?: Stop[]): string {
-  // TODO(events-stop-id): ListEventsForDelivery doesn't select stop_id yet.
   const s = e.stop_id && stops ? stops.find((x) => x.id === e.stop_id) : undefined;
   return s ? `stop ${s.sequence}` : 'a stop';
 }
@@ -81,6 +88,8 @@ export function eventText(e: DeliveryEvent, stops?: Stop[]): string {
       return 'Completed';
     case 'failed':
       return `Failed · ${reasonLabel(e.note)}`;
+    case 'truck_maintenance':
+      return 'Truck sent to the workshop';
     case 'cancelled':
       return 'Cancelled';
     default:
@@ -88,13 +97,16 @@ export function eventText(e: DeliveryEvent, stops?: Stop[]): string {
   }
 }
 
-/** Customer wording for the public tracking history; internal events return null and are skipped. */
-export function customerEventText(e: { event_type: string; note: string | null }): string | null {
+/**
+ * Customer wording for the public tracking history; internal events return null and are skipped.
+ * `plate` is the response's plate_number: there's no reassignment, so it's the truck that was assigned.
+ */
+export function customerEventText(e: TrackEvent, plate: string | null): string | null {
   switch (e.event_type) {
     case 'created':
       return 'Delivery booked';
     case 'assigned':
-      return e.note ? `Truck ${e.note.replace(/^assigned to /i, '')} assigned` : 'Truck assigned';
+      return plate ? `Truck ${plate} assigned` : 'Truck assigned';
     case 'in_transit':
       return 'On the way';
     case 'stop_completed':

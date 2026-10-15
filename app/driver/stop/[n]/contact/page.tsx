@@ -9,9 +9,8 @@ import { useStop } from '@/components/driver/useStop';
 /** Fixed list: no typing while driving. */
 const MESSAGES = ['On my way — about 10 minutes', "I've arrived at the gate", "I can't find the entrance", 'Running late — new time on the tracking link'];
 
-// Contact client: calling is the one primary action; quick messages are one-tap SMS.
-// TODO(stop-contacts): stop contacts are stored on create but not returned, so this uses the
-// delivery's customer phone for every drop-off.
+// Who to call at this stop: its site contact when it has one, else the delivery's customer (at a
+// drop-off) or dispatch (at a pickup). Calling is the one primary action; quick messages are one-tap SMS.
 export default function ContactPage() {
   const { delivery, detail, stop, config, time, progressFor, markMessage } = useStop();
 
@@ -24,9 +23,12 @@ export default function ContactPage() {
   if (!delivery || !stop) return <DriverScreen top={back}>{null}</DriverScreen>;
 
   const pickup = stop.kind === 'pickup';
-  const who = delivery.customer_name;
-  // The customer phone is for drop-offs; at the pickup, dispatch is who to call.
-  const phone = pickup ? null : (detail?.delivery.customer_phone ?? null);
+  // The site contact is who's there; the customer booked it and may be somewhere else entirely.
+  const site = !!stop.contactPhone;
+  const who = site ? (stop.contactName ?? 'Site contact') : delivery.customer_name;
+  // Without a site contact, the customer phone is for drop-offs; at the pickup, dispatch is who to call.
+  const phone = site ? stop.contactPhone : pickup ? null : (detail?.delivery.customer_phone ?? null);
+  const role = site ? 'Site contact' : pickup ? 'Pickup for' : 'Customer';
   const dispatch = config.dispatch_phone || null;
   const sent = progressFor(delivery.id).msgs[stop.seq] ?? {};
 
@@ -48,8 +50,9 @@ export default function ContactPage() {
       }
     >
       <div className="flex flex-col gap-1">
-        <span className="t-label text-ink-muted">{pickup ? 'Pickup for' : 'Deliver to'}</span>
+        <span className="t-label text-ink-muted">{role}</span>
         <h1 className="t-display m-0">{who}</h1>
+        {site && <span className="t-driver-meta text-ink-muted">At stop {stop.seq} for {delivery.customer_name}</span>}
         <span className="t-driver-meta text-ink-muted">{phone ?? (pickup ? 'Call dispatch about the pickup.' : 'No number on file. Call dispatch.')}</span>
       </div>
 

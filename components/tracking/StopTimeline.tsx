@@ -29,7 +29,7 @@ export function StopTimeline({ stops, desktop }: { stops: TimelineStop[]; deskto
               <span className="t-label" style={{ color: s.mine ? 'var(--ink)' : 'var(--ink-muted)' }}>
                 {s.label}
               </span>
-              <span className={`${desktop ? 't-body-lg' : 't-body'} wrap-anywhere`} style={{ fontWeight: s.mine ? 700 : s.other ? 400 : 500 }}>
+              <span className={`${desktop ? 't-body-lg' : 't-body'} wrap-anywhere`} style={{ fontWeight: s.mine ? 700 : 500 }}>
                 {s.main}
               </span>
               {!desktop && s.time && (
