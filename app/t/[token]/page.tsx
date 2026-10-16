@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { useMemo } from 'react';
+import { AskDelivery } from '@/components/tracking/AskDelivery';
 import { TrackingDesktop } from '@/components/tracking/TrackingDesktop';
 import { TrackingPhone } from '@/components/tracking/TrackingPhone';
 import { buildTrackingView, NOT_FOUND_VIEW } from '@/components/tracking/view';
@@ -66,9 +67,14 @@ export default function TrackingPage() {
   }
 
   const fitKey = `${token}:${view.state}`;
+  // Questions about this delivery, answered by the agent from this link's tracking data only.
+  const ask =
+    config.agent_enabled && view.state !== 'not_found' ? (
+      <AskDelivery token={token} operator={config.operator_name} phone={config.support_phone || null} desktop={desktop} />
+    ) : null;
   return desktop ? (
-    <TrackingDesktop v={view} fitKey={fitKey} seconds={config.ping_seconds} />
+    <TrackingDesktop v={view} fitKey={fitKey} seconds={config.ping_seconds} ask={ask} />
   ) : (
-    <TrackingPhone v={view} fitKey={fitKey} seconds={config.ping_seconds} />
+    <TrackingPhone v={view} fitKey={fitKey} seconds={config.ping_seconds} ask={ask} />
   );
 }

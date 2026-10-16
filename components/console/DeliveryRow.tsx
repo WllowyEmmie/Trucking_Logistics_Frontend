@@ -64,9 +64,13 @@ export function DeliveryRow(p: Props) {
           aria-pressed={p.selected}
           className="flex min-w-0 flex-1 flex-col gap-1 border-0 bg-transparent px-3 py-2.5 text-start text-ink"
         >
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-            <span className="t-mono font-semibold">{d.reference}</span>
-            <span className="t-h3 min-w-[8em] flex-1">{d.customer_name}</span>
+          {/* Reference and customer read as one line; the status tag gets the next line to itself, so
+              every row has the same shape whatever the name's length. */}
+          <span className="t-h3 wrap-anywhere">
+            <span className="t-mono me-2 font-semibold">{d.reference}</span>
+            {d.customer_name}
+          </span>
+          <span className="flex">
             <StatusPill status={d.status} size="sm" />
           </span>
           <span className="t-body-sm text-ink-muted">{p.line2}</span>

@@ -64,9 +64,24 @@ const askAgent = http.post(`${AGENT_URL}/ask`, async ({ request }) => {
   return HttpResponse.json({ answer: `**${free.length} ${free.length === 1 ? 'truck is' : 'trucks are'} free.**\n\n${table}` });
 });
 
+/** The agent's POST /track/{token}/ask: a plain answer from the mock's own /track data. */
+const askAboutDelivery = http.post(`${AGENT_URL}/track/:token/ask`, async ({ params }) => {
+  await delay(1500);
+  try {
+    const t = mock.track(String(params.token));
+    const done = t.stops.filter((s) => s.status === 'completed').length;
+    return HttpResponse.json({
+      answer: `In mock mode I can only summarise: ${t.reference} is ${t.status.replace('_', ' ')}, with ${done} of ${t.stops.length} stops done.`,
+    });
+  } catch {
+    return HttpResponse.json({ detail: 'delivery not found' }, { status: 404 });
+  }
+});
+
 export const handlers = [
   positionsSocket,
   askAgent,
+  askAboutDelivery,
   http.get(u('/health'), () => run(() => mock.health())),
   http.get(u('/config'), () => run(() => mock.config())),
   http.get(u('/geocode'), ({ request }) => run(() => mock.geocode(new URL(request.url).searchParams.get('q')))),

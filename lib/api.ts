@@ -48,18 +48,18 @@ export const ASK_TIMEOUT_MS = 90_000;
 export const TIMED_OUT = -1;
 
 /**
- * POST /ask {question} → answer. Errors are ApiErrors: status 0 when the agent can't be reached,
+ * POST to the agent → `answer`. Errors are ApiErrors: status 0 when the agent can't be reached,
  * TIMED_OUT when it took too long, otherwise the agent's own `detail`. Aborting `signal` (a newer
  * question replacing this one) rejects with the AbortError, which callers ignore.
  */
-export async function askAgent(question: string, signal: AbortSignal): Promise<string> {
+async function agentAnswer(path: string, body: unknown, signal: AbortSignal): Promise<string> {
   const timeout = AbortSignal.timeout(ASK_TIMEOUT_MS);
   let res: Response;
   try {
-    res = await fetch(`${AGENT_URL}/ask`, {
+    res = await fetch(`${AGENT_URL}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify(body),
       signal: AbortSignal.any([signal, timeout]),
     });
   } catch (e) {
@@ -74,3 +74,13 @@ export async function askAgent(question: string, signal: AbortSignal): Promise<s
   }
   return ((await res.json()) as { answer: string }).answer;
 }
+
+/** The console's Ask box: POST /ask, with the dispatcher tools. */
+export const askAgent = (question: string, signal: AbortSignal) => agentAnswer('/ask', { question }, signal);
+
+/**
+ * The tracking page's question box: POST /track/{token}/ask. The agent answers from that one
+ * delivery's /track data only, in the viewer's time zone. 429 when a link asks too often.
+ */
+export const askAboutDelivery = (token: string, question: string, timezone: string, signal: AbortSignal) =>
+  agentAnswer(`/track/${encodeURIComponent(token)}/ask`, { question, timezone }, signal);

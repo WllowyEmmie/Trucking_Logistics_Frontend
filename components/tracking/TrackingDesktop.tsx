@@ -1,4 +1,5 @@
 import { Phone } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { DispatchMap } from '@/components/map';
 import { StatusPill } from '@/components/StatusPill';
 import { History } from './History';
@@ -7,7 +8,8 @@ import { StopTimeline } from './StopTimeline';
 import { telHref } from './TrackingPhone';
 import type { TrackingView } from './view';
 
-export function TrackingDesktop({ v, fitKey, seconds }: { v: TrackingView; fitKey: string; seconds: number }) {
+/** `ask`: the customer's question box, when the agent is on (the page decides). */
+export function TrackingDesktop({ v, fitKey, seconds, ask }: { v: TrackingView; fitKey: string; seconds: number; ask?: ReactNode }) {
   const found = v.state !== 'not_found';
   return (
     <div className="flex h-dvh bg-surface-100 text-ink">
@@ -81,6 +83,8 @@ export function TrackingDesktop({ v, fitKey, seconds }: { v: TrackingView; fitKe
               ))}
             </dl>
           )}
+
+          {ask}
 
           {v.stops.length > 0 && (
             <div className="flex flex-col gap-3.5">

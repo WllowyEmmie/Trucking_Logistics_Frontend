@@ -1,4 +1,5 @@
 import { Phone } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { DispatchMap } from '@/components/map';
 import { StatusPill } from '@/components/StatusPill';
 import { History } from './History';
@@ -8,7 +9,8 @@ import type { TrackingView } from './view';
 
 export const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`;
 
-export function TrackingPhone({ v, fitKey, seconds }: { v: TrackingView; fitKey: string; seconds: number }) {
+/** `ask`: the customer's question box, when the agent is on (the page decides). */
+export function TrackingPhone({ v, fitKey, seconds, ask }: { v: TrackingView; fitKey: string; seconds: number; ask?: ReactNode }) {
   const found = v.state !== 'not_found';
   return (
     <div className="flex min-h-dvh flex-col bg-surface-100 text-ink">
@@ -60,6 +62,8 @@ export function TrackingPhone({ v, fitKey, seconds }: { v: TrackingView; fitKey:
             {v.eta.detail && <span className="t-body text-ink-muted">{v.eta.detail}</span>}
           </div>
         )}
+
+        {ask}
 
         {v.stops.length > 0 && (
           <div className="flex flex-col gap-3">

@@ -70,7 +70,7 @@ npm run typecheck
 **`app/`**
 - `layout.tsx`: Google Fonts (Inter and JetBrains Mono), leaflet.css, globals.
 - `providers.tsx`: QueryClient; starts MSW; renders on the client only, after mount (no time hydration mismatches); applies `.dark` **on `<body>`** from the theme preference (`lib/theme.ts`: System, Light or Dark, saved in localStorage, switched by `ThemeToggle` in the console header and `DispatchNav`; see dark map markers below); shows a `/health` banner if the server is down.
-- `page.tsx`: a dev index linking every surface and the 16-character demo tracking tokens.
+- `page.tsx`: a dev index linking every surface, plus real tracking links for the 20 most recent deliveries (tokens from each delivery's detail) and one link that doesn't exist.
 
 **`lib/`**
 - `types.ts`: the backend shapes (maintained by hand against the Go structs) and `THRESHOLDS`.
@@ -89,6 +89,11 @@ npm run typecheck
 - Truck plate: the response's `plate_number`, never parsed out of an event note.
 - Distance replaces the ETA. On a multi-drop delivery it's to the next open drop-off, labelled with its stop number.
 - Operator name, phone and timezone: from config.
+- **Questions box** (`AskDelivery`): the customer asks about this delivery and the agent answers through `POST /track/{token}/ask` (`askAboutDelivery` in `lib/api.ts`).
+  - The agent has no tools for this. It answers from that link's `/track` data only, in the viewer's time zone, never gives an arrival time, and sends changes to the operator.
+  - It's rate-limited per link; a 429 is shown as-is.
+  - One answer at a time, in plain text. Failures point to the operator's phone, never to agent internals.
+  - Hidden when `NEXT_PUBLIC_AGENT_ENABLED=false`. In mock mode MSW answers with a short summary.
 - Every stop's address and pin is shown, because all stops on a delivery belong to the customer holding the link. A single drop-off is labelled "Your drop-off". If consolidated runs are ever built, the fix is a per-stop token, not redaction.
 
 **Dispatcher console `/console`:** `ConsoleView` orchestrates the panes.

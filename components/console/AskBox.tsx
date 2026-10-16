@@ -79,7 +79,10 @@ export function AskBox() {
   function submit(e: FormEvent) {
     e.preventDefault();
     const question = q.trim();
-    if (question) void run(question);
+    if (!question) return;
+    // Clear the box: the question stays visible in the answer card, and Retry re-sends it from there.
+    setQ('');
+    void run(question);
   }
 
   function close() {
