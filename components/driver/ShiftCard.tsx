@@ -18,7 +18,7 @@ export function ShiftCard({ action = true }: { action?: boolean }) {
       : 'Dispatch can see where the truck is. End your shift when you finish for the day.'
     : active
       ? 'Your location isn’t shared. Starting the delivery starts your shift.'
-      : 'Your location isn’t shared. Start your shift when you’re ready to drive. Starting a delivery starts it too.';
+      : 'Your location isn’t shared. Start your shift when you’re ready to drive. Signing in or starting a delivery starts it too.';
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border-2 border-border px-4 py-3">
       <div className="flex min-w-0 flex-col gap-1">

@@ -187,8 +187,12 @@ export function FleetView() {
                   on ? 'border-2 border-ink bg-ink text-surface-100' : 'border border-border bg-surface-100 text-ink'
                 }`}
               >
-                {label}
-                <span className="t-mono-sm">{n}</span>
+                {/* Baseline-aligned: the mono count is a smaller font, so centring the two boxes
+                    left the digits sitting off the word's line. */}
+                <span className="inline-flex items-baseline gap-2">
+                  {label}
+                  <span className="font-mono text-[12px] leading-none tabular-nums">{n}</span>
+                </span>
               </button>
             );
           })}
