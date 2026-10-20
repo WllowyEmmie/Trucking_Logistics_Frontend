@@ -20,7 +20,7 @@ npm run typecheck
 - **In mock mode there is no rewrite**, on purpose. A request MSW misses gets a 404 instead of reaching a real backend.
   - Before that fix, one missed request wrote test trucks into the developer's real database. **Never test write flows in mock mode while the proxy is on.**
 - **The agent** (`../../PycharmProjects/PythonProject1/agent`, FastAPI on :8200) answers the Ask box and writes proposals on a timer. The console calls `POST /ask` directly at `NEXT_PUBLIC_AGENT_URL` (default `http://localhost:8200`), because the agent has CORS for `localhost:3000`/`3471`, so there's no rewrite. In mock mode MSW answers `/ask` ("which trucks are free" only).
-- Operator name, phones, the agent switch and the depot aren't served by the API. They're `NEXT_PUBLIC_*` env vars, read in `lib/config.ts` (`TODO(config)`).
+- Every operator setting (region, map and service area, company name, phones, depot, agent switch, alert thresholds) comes from `GET /config` and is edited on Settings (`PUT /config`). Stored in the API database; applies without a restart.
 
 ## Rules (from the handoff)
 - Tokens: `app/dispatch-tokens.css` is a verbatim copy of the design tokens. Don't hand-edit values. `app/globals.css` imports it and adds base and map styles. Never hardcode colours; use the token utilities (`bg-surface-100`, `text-ink`, `border-border`, `text-attention`, …) or `var(--…)`.
@@ -39,6 +39,13 @@ npm run typecheck
 - The global unlayered `a { color }` rule beats Tailwind utilities, so styled links set their colour inline.
 
 ## The API as the screens use it
+- **Sign-in.** Every route except `/health`, `/config`, `/track/{token}` and `/auth/*` needs a session.
+  - Dispatchers: `POST /auth/login {email, password}`; drivers: `POST /auth/driver-login {phone, pin}`. The API sets an HttpOnly `session` cookie; the page never sees the token. `GET /auth/me` → `{role, id, name, email?, truck_id?}` or 401. `POST /auth/logout`.
+  - `components/auth/Gate.tsx`: `DispatcherGate` (in `app/console/layout.tsx`) and `DriverGate` (in `DriverRoot`) show the sign-in form until `me` is the right role. `useSignedInAs()` inside them.
+  - A 401 from any other call clears `me` (`setUnauthorizedHandler` in Providers), so the gate shows sign-in again. The driver queue keeps a 401'd item and sends it after sign-in.
+  - Drivers only get their own truck (the one with them as `driver_id`), its deliveries and themselves; someone else's is a 404. They can't open `/ws`. Dispatchers set PINs in Fleet (`POST /drivers/{id}/pin`), which signs that driver out.
+  - The agent is reached at `/agent/*` on this origin (Next rewrite to `AGENT_BACKEND_URL`) so the cookie goes along; `/ask` checks a dispatcher is asking.
+  - Mock mode: any email/password is a dispatcher; a mock driver's phone with PIN 1234 is that driver (`mocks/auth.ts`).
 - **`GET /deliveries` is a thin list** (`id, reference, status, customer_name, truck_id, created_at`): no stops, no end time, no truck filter.
   - Stops, events and `tracking_token` only come from `GET /deliveries/{id}`, which returns `{delivery, stops, events}` with events oldest first.
   - Screens fetch detail only where it's shown: the console's selected and expanded rows, failed deliveries from the last 48 h (for the failure time in the exception table), the driver's active delivery, and the driver summary.
@@ -55,8 +62,8 @@ npm run typecheck
   - It throttles to one request a second, as Nominatim's policy asks, and caches results for 24 h.
   - Switching to a paid provider means adding another `Geocoder`; nothing changes in the frontend.
 - **`POST /locations`** pings take `recorded_at`, `accuracy_m` and `speed_kph`, max 500, and must be inside the bounding box. The driver app filters out-of-area pings before sending.
-- **`GET /config`** gives units (`metric | imperial`), timezone, language, centre, zoom and bounding box. It's read-only: there's no write path.
-  - `useConfig()` returns an `AppConfig`: server config, the `NEXT_PUBLIC_*` values, `THRESHOLDS`, `locale` (= language), `center`, and `hasServiceArea`.
+- **`GET /config`** (public) gives every operator setting: country, units (`metric | imperial`), timezone, language, centre, zoom, bounding box, operator_name, support_phone, dispatch_phone, depot, agent_enabled, stale/pending/failed-window/ping thresholds, updated_at (and updated_by for dispatchers). **`PUT /config`** (dispatchers) saves the whole object; **`POST /config/check`** counts open stops and trucks outside a proposed area.
+  - `useConfig()` returns an `AppConfig`: the server config plus `locale` (= language), `center`, and `hasServiceArea`. Refetched every 5 minutes and on focus.
 - **`GET /track/{token}`** (token exactly 16 characters) has no operator info and no ETA. It has `plate_number` (null until assigned, and after a cancel) and every stop.
   - The failure reason is the note of the `failed` event, and end times come from events.
   - Its events are `TrackEvent`: no `id`, no `stop_id`.
@@ -81,7 +88,7 @@ npm run typecheck
   - query keys;
   - event helpers: `eventText` (dispatcher wording), `customerEventText`, `eventAt`, `endedAt`, `failReasonOf`;
   - stop helpers: `stopDone`, `currentStopIndex`, `hasLatLng`.
-- `exceptions.ts`: pure rules (`isStale`, `activeByTruck`, `deriveExceptions`): silent truck, pending N+ while trucks are free, failed in the window (times from detail), agent flags. There's no late rule, because there are no ETAs (`TODO(eta-api)`).
+- `exceptions.ts`: pure rules (`isStale`, `activeByTruck`, `deriveExceptions`): silent truck, pending N+ while trucks are free, failed in the window (times from detail), agent flags, and late / at risk against the due time (`lib/due.ts`).
 - `format.ts`: Intl time, date, durations, distance (`metric | imperial`), tz helpers and `haversineKm`.
 - `positions.ts`, `offlineQueue.ts`, `labels.ts`, `useNow.ts`, `useMediaQuery.ts`, `useElementWidth.ts`.
 
@@ -115,6 +122,7 @@ npm run typecheck
   - the filter chips in both panes are one row that scrolls sideways;
   - Needs attention shows four rows and scrolls after that.
 - The assign panel shows straight-line distance only. There's no "minutes to pickup", because the API has no ETA.
+- The assign panel offers every available truck (up to 8). Trucks with a fresh position come first, nearest first. Then come the rest, with "Last position … ago" or "No position yet" instead of a distance. Hiding them made nothing assignable whenever positions went stale.
 - The expanded row shows phone, goods, the **customer link** (`/t/{tracking_token}`), stops (arrived and completed times) and events.
 - The Ask box calls the agent (`askAgent` in `lib/api.ts`) and shows one answer inline above the list.
   - There's no history: a new question aborts and replaces the last one.
@@ -141,15 +149,17 @@ npm run typecheck
   - This goes beyond the design, whose lists are display-only. Without it, a truck that broke down could never be dispatched again.
 - Capacity and the app-link SMS need backend support (`TODO(fleet-api)`).
 
-**Settings `/console/settings`: read-only.**
-- Shows the server config with the env var that sets each value (`OPERATOR_UNITS/TIMEZONE/LANGUAGE`, `MAP_CENTER_*`, `MAP_DEFAULT_ZOOM`, `SERVICE_MIN/MAX_LAT/LNG`).
-- Also shows the frontend env values, the thresholds, the service area outlined on a map, and the Intl preview including RTL.
-- Warns when no service area is set.
-- The sticky header sets the root `scroll-padding-top` from its live height.
+**Failed deliveries** get a "Send it out again" panel (`SendAgainPanel`, rules in `lib/reopen.ts`) calling `POST /deliveries/{id}/reopen {mode, truck_id}`: **Reassign** (nothing collected yet, any truck), **Try again** (goods on the truck, same truck), **Hand over** (goods on a truck that broke down: another truck collects from its last position, a "Handover from …" pickup is inserted), **Start over** (every stop again). Recommended option first, from the failure reason and whether a pickup was completed. One transaction: a refused truck leaves it failed. Same reference and tracking link; a `reopened` event marks the new attempt. The agent proposes these too: a proposal with `action: {type: 'reopen', mode, delivery_id, truck_id}`; approving runs the same rules.
+
+**Due times and ETAs** (`lib/due.ts`): `due_by` is the promised time for the last drop-off, set on New delivery or in the row's details (`POST /deliveries/{id}/due`, `DueEdit`); datetime inputs are read in the operator's time zone. `eta` (list, tracking) and `eta.stops` (detail) are the API's estimate: straight-line distance x1.3 at the Settings average speed, plus Settings minutes per stop, from the truck's last position. Late = due passed and not delivered; at risk = ETA after due. Both appear in Needs attention.
+
+**Console list and History.** The console fetches `GET /deliveries?board=1`: everything open, failed ones until they're sent out again or cancelled (a failed delivery can be cancelled to close it), and completed/cancelled ones for `board_hours` (Settings) after they finish (`finished_at`). **History `/console/history`** (`components/history/HistoryView.tsx`, `lib/history.ts`) pages through `GET /deliveries/history` (outcome: completed, cancelled, failed, recovered = failed then completed, late; q; from/to in the operator's days; keyset `before` cursor), shows each delivery's story in one line (`journey`), its full timeline on expand, and exports the loaded rows as CSV.
+
+**Settings `/console/settings`:** browser-settings layout: sections in a sidebar, a search box that filters rows, one sticky Save/Discard bar. Picking a country (`lib/countries.ts`) fills time zone, language, units, map centre and a country-wide service area. A changed area is checked with `POST /config/check` first and the dispatcher confirms if open stops or trucks would fall outside. Appearance (theme) is per browser and saves at once.
 
 **Driver PWA `/driver`:** routes `/driver` (Today or empty), `/driver/stop/[n]`, `stop/[n]/contact`, `stop/[n]/problem`, `/driver/done`.
 - `DriverProvider`:
-  - Resolves `NEXT_PUBLIC_DEMO_TRUCK_ID` (a plate or UUID) against `/trucks`.
+  - Uses the signed-in driver's `truck_id` from `/auth/me` (no socket: it polls `/trucks`, which shows a driver only their truck).
   - Filters the delivery list to this truck and polls the active delivery's detail. Truck, list and detail are cached in localStorage so the app opens offline.
   - Optimistic statuses come from queued actions, and per-stop confirm times are kept locally.
   - GPS `watchPosition` batches to `/locations` every `ping_seconds`. A parked phone sends nothing between fixes (there is no heartbeat).
@@ -212,10 +222,12 @@ Nothing from BUILD.md. What's left is backend work (the tags below), and running
 Reference behaviour and copy for each screen is in the matching `Design/design_handoff_dispatch/*.dc.html` file: the markup is the layout and the `class Component` block is the behaviour.
 
 ## Backend gaps (search for these TODO tags)
-- `TODO(config)`: operator name, phones, agent switch and depot aren't in `GET /config`; there's no write path.
-- `TODO(config-thresholds)`: stale, pending, failed-window and ping thresholds are client constants.
-- `TODO(eta-api)`: no ETA or promised time per stop, so there's no late rule, no ETA on tracking, and the Ask box can't answer "late".
-- `TODO(pod-api)`: proof of delivery on `/complete`.
 - `TODO(fleet-api)`: truck capacity, app-link SMS.
 - Proposals come from the agent's scheduler (a tick every `TICK_SECONDS`, default 180). It only proposes a truck within 2 km of a pickup with a fresh position, so the pane is often empty.
-- **Socket status:** `position` frames omit `status`, and assign/complete/fail/cancel/PATCH aren't broadcast, so status still comes from `/trucks` polling. `ingestLocations` only broadcasts when the stored fix moved (late batches are kept but not pushed); the client still ignores older fixes.
+- **Socket status:** every successful write is announced as `{type:"changed", topics, delivery_id}`; `lib/positions.ts` invalidates the matching queries (debounced 250 ms), and polling (60 s console, 15 s driver) is only the fallback. `position` frames still omit `status`.
+
+## Shifts and proof of delivery
+- A driver starts and ends a shift in the app (`POST /auth/me/shift`); starting a delivery starts one; dispatch can end one (`POST /drivers/{id}/shift/end`). One open shift per driver. GPS runs only on shift, and the API refuses positions (409) from a driver who's off shift. The agent skips trucks whose driver is off shift.
+- Every drop-off needs proof before a driver can complete it: receiver name plus signature (and photo if Settings ask for one), posted as data URLs to `/deliveries/{id}/stops/{stopId}/proof` through the offline queue. Images live in `stop_proofs` (Postgres, so backups include them). Dispatchers can complete without proof.
+- Tracking page: no tabs. The delivery terms are small print under the delivery details (`TermsNotice`, full text folded behind "Read the delivery terms"). The help questions go to the agent: it has the answers in its prompt, and the first four show as tap-to-ask suggestions in `AskDelivery`. Text comes from Settings → Proof and customer page, with `{company}` and `{support_phone}` filled in.
+- Picking a place from Find always sets the stop's address to the full geocoder label (what the driver and the tracking page show).

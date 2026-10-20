@@ -86,7 +86,10 @@ export function TruckList({ trucks, config, driverName, deliveryOf, filter, onFi
               >
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
                   <span className="t-mono font-bold">{t.plate_number}</span>
-                  <span className="t-body-sm min-w-[6em] flex-1">{driverName(t.driver_id) ?? 'No driver'}</span>
+                  <span className="t-body-sm min-w-[6em] flex-1">
+                    {driverName(t.driver_id) ?? 'No driver'}
+                    {t.driver_id && t.driver_on_shift === false && <span className="text-ink-muted"> · off shift</span>}
+                  </span>
                   <StatusPill status={t.status} size="sm" />
                 </span>
                 <span className="t-body-sm flex items-center gap-1.5 text-ink-muted" style={{ fontWeight: bold ? 700 : 400 }}>

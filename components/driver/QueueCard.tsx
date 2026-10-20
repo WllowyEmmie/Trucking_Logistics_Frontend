@@ -35,8 +35,9 @@ export function QueueCard() {
         <div className="flex flex-col gap-2.5 rounded-lg border-2 border-ink p-4">
           <span className="t-h2">Waiting to send · {lines.length}</span>
           <ol className="t-driver-meta m-0 flex flex-col gap-1.5 ps-5">
-            {lines.map((l) => (
-              <li key={l}>{l}</li>
+            {lines.map((l, i) => (
+              // Two identical steps in the same minute give identical lines: the index keeps keys unique.
+              <li key={`${i}:${l}`}>{l}</li>
             ))}
           </ol>
           <span className="t-body text-ink-muted">Sends by itself when signal returns. Closing the app doesn&apos;t lose them.</span>

@@ -1,15 +1,20 @@
 'use client';
 
 import Link from 'next/link';
+import { SignOutButton } from '@/components/auth/SignOut';
+import { ApiError } from '@/lib/api';
 import { useDriver } from '@/components/driver/DriverProvider';
 import { DriverScreen } from '@/components/driver/DriverScreen';
 import { HoldToConfirm } from '@/components/driver/HoldToConfirm';
+import { ShiftCard } from '@/components/driver/ShiftCard';
 import { StopList } from '@/components/driver/StopList';
 import { primaryCls, primaryStyle, secondaryCls, secondaryStyle, telHref } from '@/components/driver/ui';
 
+const signOutCls = 't-driver-meta min-h-14 flex-none rounded-lg border-2 border-border bg-surface-100 px-3.5 font-bold text-ink';
+
 // Today: the stops of the current delivery, or the empty state.
 export default function DriverToday() {
-  const { active, detail, stops, current, config, truckLabel, driverName, gps, time, start, loading, loadError } = useDriver();
+  const { active, detail, stops, current, config, truckLabel, driverName, gps, time, start, loading, loadError, onShift, setShift } = useDriver();
   const callDispatch = (
     config.dispatch_phone ? (
       <a href={telHref(config.dispatch_phone)} role="button" className={secondaryCls} style={secondaryStyle}>
@@ -21,16 +26,37 @@ export default function DriverToday() {
   if (!active) {
     if (loading) return <DriverScreen notices={false}>{null}</DriverScreen>;
     return (
-      <DriverScreen bottom={callDispatch}>
+      <DriverScreen
+        bottom={
+          <>
+            {onShift ? (
+              <button type="button" onClick={() => setShift(false)} className={secondaryCls} style={secondaryStyle}>
+                End shift
+              </button>
+            ) : (
+              <HoldToConfirm label="Hold to start shift" onConfirm={() => setShift(true)} />
+            )}
+            {callDispatch}
+          </>
+        }
+      >
         <div className="flex flex-col gap-3.5 pt-4">
-          <span className="t-label text-ink-muted">
-            {truckLabel}
-            {driverName ? ` · ${driverName}` : ''}
-          </span>
-          {loadError ? (
+          <div className="flex items-center justify-between gap-3">
+            <span className="t-label text-ink-muted">
+              {truckLabel}
+              {driverName ? ` · ${driverName}` : ''}
+            </span>
+            <SignOutButton driver className={signOutCls} />
+          </div>
+          {loadError && loadError instanceof ApiError && loadError.status === 0 ? (
             <>
               <h1 className="t-display m-0">Can&apos;t reach dispatch</h1>
               <p className="t-driver-meta m-0 max-w-[32ch]">Your deliveries will show here as soon as the connection is back.</p>
+            </>
+          ) : loadError ? (
+            <>
+              <h1 className="t-display m-0">Can&apos;t show your deliveries</h1>
+              <p className="t-driver-meta m-0 max-w-[32ch]">{loadError.message}</p>
             </>
           ) : (
             <>
@@ -38,6 +64,7 @@ export default function DriverToday() {
               <p className="t-driver-meta m-0 max-w-[32ch]">Dispatch will send your next delivery here. You don&apos;t need to refresh.</p>
             </>
           )}
+          <ShiftCard action={false} />
         </div>
       </DriverScreen>
     );
@@ -81,6 +108,7 @@ export default function DriverToday() {
         {!started && <p className="t-driver-meta m-0 text-ink-muted">Start when you leave for the first stop. Dispatch and the customers see the truck move from then.</p>}
       </div>
       <StopList stops={stops} current={started ? current : -1} config={config} pos={gps.pos} time={time} />
+      <ShiftCard />
     </DriverScreen>
   );
 }

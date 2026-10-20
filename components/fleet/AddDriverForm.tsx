@@ -2,10 +2,14 @@
 
 import { useMutation } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
+import { PhoneInput } from '@/components/PhoneInput';
 import { patch, post } from '@/lib/api';
+import { useConfig } from '@/lib/config';
+import { defaultPhoneCountry, emptyPhone, phoneProblem, toE164, type PhoneValue } from '@/lib/phone';
 import type { CreateDriverRequest, Driver, Truck, UpdatedTruck } from '@/lib/types';
-import { fieldCls, formCls, hintCls, normPhone, submitCls } from './forms';
+import { driverRequest, fieldCls, formCls, hintCls, submitCls } from './forms';
 import { FormResult } from './FormResult';
+import { PinReveal } from './PinReveal';
 
 interface Props {
   trucks: Truck[];
@@ -13,14 +17,20 @@ interface Props {
   onAdded: (d: Driver, truck: UpdatedTruck | null) => void;
 }
 
-const PHONE_HINT = 'Include the country code, e.g. +44. Used for calls from dispatch.';
+const PHONE_HINT = 'Their mobile: they sign in to the driver app with it, and dispatch calls it. A leading 0 is fine.';
 
 // POST /drivers takes a name and a phone. The usual truck is the truck's driver_id, so it's a
-// PATCH /trucks/{id} straight after. The app-link SMS needs an endpoint. TODO(fleet-api)
+// PATCH /trucks/{id} straight after. With generate_pin the API also returns a one-time app PIN.
 export function AddDriverForm({ trucks, onAdded }: Props) {
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+  const config = useConfig();
+  const homeCountry = defaultPhoneCountry(config);
+  const [phone, setPhone] = useState<PhoneValue>(() => emptyPhone(homeCountry));
   const [truckId, setTruckId] = useState('');
+  // On by default: a driver without a PIN can't use the app.
+  const [genPin, setGenPin] = useState(true);
+  // The PIN the server generated for the driver just added: shown once, until Done.
+  const [issued, setIssued] = useState<{ pin: string; name: string; phone: string } | null>(null);
   const [errs, setErrs] = useState<{ name?: string; phone?: string }>({});
   const [ok, setOk] = useState<string | null>(null);
   // The driver was added but the PATCH linking the truck was refused.
@@ -30,7 +40,7 @@ export function AddDriverForm({ trucks, onAdded }: Props) {
 
   const add = useMutation({
     mutationFn: async ({ body, truckId }: { body: CreateDriverRequest; truckId: string }) => {
-      const d = await post<Driver>('/drivers', body);
+      const d = await post<Driver & { pin?: string }>('/drivers', body);
       if (!truckId) return { d, truck: null, err: null };
       try {
         return { d, truck: await patch<UpdatedTruck>(`/trucks/${truckId}`, { driver_id: d.id }), err: null };
@@ -40,10 +50,12 @@ export function AddDriverForm({ trucks, onAdded }: Props) {
     },
     onSuccess: ({ d, truck, err }) => {
       onAdded(d, truck);
+      setIssued(d.pin ? { pin: d.pin, name: d.name, phone: d.phone } : null);
       setTruckErr(err);
       setOk(err ? null : truck ? `Added ${d.name}, usual truck ${truck.plate_number}.` : `Added ${d.name}.`);
       setName('');
-      setPhone('');
+      // Keep the country picked: the next driver is most likely from the same one.
+      setPhone((p) => emptyPhone(p.country));
       setTruckId('');
     },
   });
@@ -56,13 +68,11 @@ export function AddDriverForm({ trucks, onAdded }: Props) {
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    const next: typeof errs = {};
-    const ph = normPhone(phone);
-    if (!name.trim()) next.name = "Enter the driver's name";
-    if (!ph) next.phone = 'Enter a mobile number';
-    else if (!/^\+\d{7,15}$/.test(ph)) next.phone = 'Start with + and the country code, then the number';
-    setErrs(next);
-    if (Object.keys(next).length === 0) add.mutate({ body: { name: name.trim(), phone: phone.trim() }, truckId });
+    const r = driverRequest(name, toE164(phone));
+    const phoneErr = phoneProblem(phone);
+    setErrs(r.ok ? (phoneErr ? { phone: phoneErr } : {}) : { ...r.errs, phone: phoneErr ?? r.errs.phone });
+    if (phoneErr) return;
+    if (r.ok) add.mutate({ body: { ...r.body, generate_pin: genPin }, truckId });
   }
 
   return (
@@ -73,6 +83,7 @@ export function AddDriverForm({ trucks, onAdded }: Props) {
         ok={ok}
         title={truckErr ? `Added ${add.data?.d.name ?? 'the driver'}, but the usual truck wasn't set` : undefined}
       />
+      {issued && <PinReveal pin={issued.pin} name={issued.name} phone={issued.phone} onDone={() => setIssued(null)} />}
       <label className="flex flex-col gap-1.5">
         <span className="t-h3">Full name</span>
         <input
@@ -93,23 +104,42 @@ export function AddDriverForm({ trucks, onAdded }: Props) {
           </span>
         )}
       </label>
-      <label className="flex flex-col gap-1.5">
-        <span className="t-h3">Mobile phone</span>
-        <input
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="driver-phone" className="t-h3">
+          Mobile phone
+        </label>
+        <PhoneInput
+          id="driver-phone"
           value={phone}
-          onChange={(e) => {
-            setPhone(e.target.value);
+          onChange={(v) => {
+            setPhone(v);
             setErrs((x) => ({ ...x, phone: undefined }));
             touched();
           }}
-          type="tel"
           autoComplete="off"
-          aria-invalid={!!errs.phone}
-          aria-describedby="driver-phone-hint"
-          className={fieldCls(!!errs.phone, true)}
+          invalid={!!errs.phone}
+          describedBy="driver-phone-hint"
+          label="Mobile phone"
         />
         <span id="driver-phone-hint" className={hintCls(!!errs.phone)}>
           {errs.phone ?? PHONE_HINT}
+        </span>
+      </div>
+      <label className="flex min-h-11 items-start gap-3">
+        <input
+          type="checkbox"
+          checked={genPin}
+          onChange={(e) => {
+            setGenPin(e.target.checked);
+            touched();
+          }}
+          className="mt-0.5 h-5 w-5 flex-none accent-[var(--ink)]"
+        />
+        <span className="flex flex-col gap-0.5">
+          <span className="t-h3">Generate an app PIN</span>
+          <span className={hintCls()}>
+            A random 6-digit PIN, shown once after adding, to text or WhatsApp to the driver. You can generate a new one any time.
+          </span>
         </span>
       </label>
       <label className="flex flex-col gap-1.5">

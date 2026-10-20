@@ -23,16 +23,18 @@ import { formatTime, minutesSince, tzAbbr } from '@/lib/format';
 import { STATUS_LABEL } from '@/lib/labels';
 import { TRUCKS_KEY, usePositions, usePositionsStatus } from '@/lib/positions';
 import type { CreateDeliveryResponse, DeliveryListItem, Proposal, Truck } from '@/lib/types';
-
-/** POST /deliveries/{id}/assign returns the delivery row; only these fields are used. */
-type AssignResponse = Pick<DeliveryListItem, 'id' | 'reference' | 'status' | 'truck_id'>;
+import { useAcks } from '@/lib/acks';
 import { useElementWidth } from '@/lib/useElementWidth';
 import { useNow } from '@/lib/useNow';
 import { ConsoleHeader } from './ConsoleHeader';
 import { DELIVERY_FILTERS, DeliveryList, type AssignError, type DeliveryFilter } from './DeliveryList';
+import type { ReopenMode } from '@/lib/reopen';
 import { ProposalsPane, type ProposalError } from './ProposalsPane';
 import { TruckList, type TruckFilter } from './TruckList';
 import { tabCls } from './ui';
+
+/** POST /deliveries/{id}/assign returns the delivery row; only these fields are used. */
+type AssignResponse = Pick<DeliveryListItem, 'id' | 'reference' | 'status' | 'truck_id'>;
 
 const PROPOSALS_KEY = ['proposals'] as const;
 
@@ -51,6 +53,8 @@ type Hover = { id: string; link: boolean } | null;
 interface AssignVars {
   deliveryId: string;
   truckId: string;
+  /** A failed delivery: POST /reopen with the mode and truck, which resets its stops and assigns in one go. */
+  mode?: ReopenMode;
 }
 type Decision = { p: Proposal; verb: 'approve' | 'reject' };
 type Params = Partial<Record<'d' | 't' | 'f', string | null>>;
@@ -159,15 +163,32 @@ export function ConsoleView() {
   const flags = allProposals.filter((p) => p.kind === 'flag');
   const changes = allProposals.filter((p) => p.kind === 'change');
 
-  const exceptions = deriveExceptions(deliveries, trucks, driverName, failed, flags, config, now);
+  const allExceptions = deriveExceptions(deliveries, trucks, driverName, failed, flags, config, now);
+  // Dismissed ones leave the count, the table and the rows' red flag; they can be shown and restored.
+  const acks = useAcks();
+  const exceptions = allExceptions.filter((x) => !acks.has(x.key));
+  const dismissed = allExceptions.filter((x) => acks.has(x.key));
   const attentionIds = new Set(exceptions.flatMap((x) => (x.deliveryId ? [x.deliveryId] : [])));
+  function dismissException(x: ExceptionRow) {
+    acks.ack(x.key);
+    // An agent flag is the agent's to raise and everyone's to see: dismissing it rejects it on
+    // the server, so it leaves every dispatcher's list, not just this browser's.
+    if (x.agent && x.key.startsWith('agent-')) {
+      void post(`/proposals/${encodeURIComponent(x.key.slice('agent-'.length))}/reject`)
+        .catch(() => undefined)
+        .finally(() => void qc.invalidateQueries({ queryKey: PROPOSALS_KEY }));
+    }
+  }
 
   const selD = sel ? (deliveries.find((d) => d.id === sel) ?? null) : null;
   const selDetail = selQ.data;
 
   // ---- Assign: optimistic, rolled back on error; a 409 is shown word for word and refetches ----
   const assign = useMutation({
-    mutationFn: (v: AssignVars) => post<AssignResponse>(`/deliveries/${encodeURIComponent(v.deliveryId)}/assign`, { truck_id: v.truckId }),
+    mutationFn: (v: AssignVars) =>
+      v.mode
+        ? post<AssignResponse>(`/deliveries/${encodeURIComponent(v.deliveryId)}/reopen`, { mode: v.mode, truck_id: v.truckId })
+        : post<AssignResponse>(`/deliveries/${encodeURIComponent(v.deliveryId)}/assign`, { truck_id: v.truckId }),
     onMutate: async (v) => {
       await Promise.all([qc.cancelQueries({ queryKey: DELIVERIES_KEY }), qc.cancelQueries({ queryKey: TRUCKS_KEY })]);
       const prevD = qc.getQueryData<DeliveryListItem[]>(DELIVERIES_KEY);
@@ -184,7 +205,7 @@ export function ConsoleView() {
     onError: (e, v, ctx) => {
       if (ctx?.prevD) qc.setQueryData(DELIVERIES_KEY, ctx.prevD);
       if (ctx?.prevT) qc.setQueryData(TRUCKS_KEY, ctx.prevT);
-      setError(v.deliveryId, { conflict: isConflict(e), message: e.message, truckId: v.truckId });
+      setError(v.deliveryId, { conflict: isConflict(e), message: e.message, truckId: v.truckId, mode: v.mode });
     },
     onSuccess: (d, v) => {
       qc.setQueryData<DeliveryListItem[]>(DELIVERIES_KEY, (ds) =>
@@ -193,7 +214,7 @@ export function ConsoleView() {
       const t = T.get(v.truckId);
       const plate = t?.plate_number ?? 'the truck';
       const who = driverName(t?.driver_id ?? null);
-      setNote(d.id, `Assigned ${plate}. ${who ?? 'The driver'} has the delivery on their phone.`);
+      setNote(d.id, `${v.mode ? 'Sent out again on' : 'Assigned'} ${plate}. ${who ?? 'The driver'} has the delivery on their phone.`);
     },
     onSettled: (_d, _e, v) => {
       void qc.invalidateQueries({ queryKey: DELIVERIES_KEY });
@@ -232,10 +253,34 @@ export function ConsoleView() {
   const deciding = decide.isPending ? decide.variables : undefined;
   const pendingVars = assign.isPending ? assign.variables : undefined;
 
+  // ---- Cancel: the API frees the truck; refetch rather than guess ----
+  const [cancelErrors, setCancelErrors] = useState<Record<string, string>>({});
+  const cancel = useMutation({
+    mutationFn: (deliveryId: string) => post(`/deliveries/${encodeURIComponent(deliveryId)}/cancel`),
+    onMutate: (id) => setCancelErrors(({ [id]: _gone, ...rest }) => rest),
+    onSuccess: (_r, id) => {
+      const ref = deliveries.find((d) => d.id === id)?.reference ?? 'The delivery';
+      setNote(id, `${ref} cancelled.`);
+      setError(id, null);
+    },
+    onError: (e, id) => setCancelErrors((m) => ({ ...m, [id]: e.message })),
+    onSettled: (_r, _e, id) => {
+      void qc.invalidateQueries({ queryKey: DELIVERIES_KEY });
+      void qc.invalidateQueries({ queryKey: TRUCKS_KEY });
+      void qc.invalidateQueries({ queryKey: detailKey(id) });
+    },
+  });
+
   function doAssign(deliveryId: string, truckId: string) {
     setParams({ d: deliveryId, f: filter === 'pending' ? 'all' : undefined });
     setExp(deliveryId);
     assign.mutate({ deliveryId, truckId });
+  }
+
+  function doReopen(deliveryId: string, truckId: string, mode: ReopenMode) {
+    setParams({ d: deliveryId, f: filter === 'failed' ? 'all' : undefined });
+    setExp(deliveryId);
+    assign.mutate({ deliveryId, truckId, mode });
   }
 
   // ---- Selection ----
@@ -258,7 +303,7 @@ export function ConsoleView() {
   }
   function onCreated(r: CreateDeliveryResponse) {
     const d = r.delivery;
-    const item: DeliveryListItem = { id: d.id, reference: d.reference, status: d.status, customer_name: d.customer_name, truck_id: null, created_at: d.created_at };
+    const item: DeliveryListItem = { id: d.id, reference: d.reference, status: d.status, customer_name: d.customer_name, truck_id: null, created_at: d.created_at, due_by: null, eta: null, finished_at: null };
     qc.setQueryData<DeliveryListItem[]>(DELIVERIES_KEY, (ds) => [item, ...(ds ?? []).filter((x) => x.id !== d.id)]);
     void qc.invalidateQueries({ queryKey: DELIVERIES_KEY });
     setCreating(false);
@@ -369,6 +414,9 @@ export function ConsoleView() {
         config={config}
         clock={clock}
         exceptions={exceptions}
+        dismissed={dismissed}
+        onDismiss={dismissException}
+        onRestore={(x) => acks.restore(x.key)}
         stacked={narrow}
         onView={onException}
       />
@@ -435,6 +483,10 @@ export function ConsoleView() {
             }}
             onHover={(id) => setHover(id ? { id, link: true } : null)}
             onAssign={doAssign}
+            onReopen={doReopen}
+            onCancel={(id) => cancel.mutate(id)}
+            cancellingId={cancel.isPending ? (cancel.variables ?? null) : null}
+            cancelErrors={cancelErrors}
             onCreating={(open) => {
               setCreating(open);
               if (open) setTab('deliveries');

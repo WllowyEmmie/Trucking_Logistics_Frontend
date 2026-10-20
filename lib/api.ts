@@ -1,5 +1,14 @@
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
+/**
+ * Called when the API answers 401 to a signed-in screen: the session expired or was ended
+ * elsewhere (a PIN reset signs a driver out). Providers points it at the sign-in state.
+ */
+let onUnauthorized: (() => void) | null = null;
+export const setUnauthorizedHandler = (fn: (() => void) | null) => {
+  onUnauthorized = fn;
+};
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -24,6 +33,8 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
+    // /auth/* answers 401 for a wrong password or "not signed in": that's for the caller.
+    if (res.status === 401 && !path.startsWith('/auth/')) onUnauthorized?.();
     throw new ApiError(res.status, body.error ?? res.statusText);
   }
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
@@ -40,8 +51,11 @@ export const isNotFound = (e: unknown): e is ApiError => e instanceof ApiError &
 
 // ---- The dispatch agent: a separate service on its own origin ----
 
-/** It has CORS for localhost:3000 and :3471, so the browser calls it directly (no rewrite). */
-export const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL ?? 'http://localhost:8200';
+/**
+ * Same origin by default: Next rewrites /agent/* to the agent (AGENT_BACKEND_URL), so the session
+ * cookie goes with the console's questions and the agent can check it's a dispatcher asking.
+ */
+export const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL ?? '/agent';
 /** An ask makes several model and tool calls; past this it's stuck, not thinking. */
 export const ASK_TIMEOUT_MS = 90_000;
 /** ApiError status for an ask that ran past ASK_TIMEOUT_MS. */
@@ -68,6 +82,7 @@ async function agentAnswer(path: string, body: unknown, signal: AbortSignal): Pr
     throw new ApiError(0, `The agent isn't reachable at ${AGENT_URL}.`);
   }
   if (!res.ok) {
+    if (res.status === 401 && path === '/ask') onUnauthorized?.();
     // FastAPI errors are {detail}: a string from the agent, a list for a validation error.
     const body = (await res.json().catch(() => ({}))) as { detail?: unknown };
     throw new ApiError(res.status, typeof body.detail === 'string' ? body.detail : `The agent answered ${res.status} ${res.statusText}.`);

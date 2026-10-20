@@ -120,7 +120,7 @@ export function ProposalsPane(p: Props) {
               {err && (
                 <div role="alert" className="flex flex-col gap-1 rounded-md border border-status-failed bg-status-failed-bg px-3 py-2.5">
                   <span className="t-body-sm font-bold">{err.verb === 'approve' ? 'Not applied' : 'Not rejected'}</span>
-                  <span className="t-mono wrap-anywhere">{err.conflict ? `409 · ${err.message}` : err.message}</span>
+                  <span className="t-body-sm wrap-anywhere">{err.message}</span>
                   {gone && <span className="t-body-sm text-ink-muted">{goneNote(err.message)}</span>}
                 </div>
               )}

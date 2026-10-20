@@ -1,11 +1,17 @@
+import Link from 'next/link';
 import { ChevronDown, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { StatusPill } from '@/components/StatusPill';
 import type { AppConfig } from '@/lib/config';
 import { currentStopIndex, eventText } from '@/lib/deliveries';
 import { formatTime, formatWhen } from '@/lib/format';
-import type { DeliveryDetailResponse, DeliveryListItem } from '@/lib/types';
+import type { ReopenMode } from '@/lib/reopen';
+import type { DeliveryDetailResponse, DeliveryListItem, Truck } from '@/lib/types';
 import { AssignPanel, type Candidate } from './AssignPanel';
+import { SendAgainPanel } from './SendAgainPanel';
+import { DueEdit } from './DueEdit';
+import { ProofView } from './ProofView';
+import type { DueState } from '@/lib/due';
 
 export interface RowError {
   conflict: boolean;
@@ -17,6 +23,9 @@ interface Props {
   /** Undefined until GET /deliveries/{id} answers (only fetched for the expanded row). */
   detail: DeliveryDetailResponse | undefined;
   line2: string;
+  /** "Due 14:30 · ETA 14:10"; null when neither. */
+  due: string | null;
+  dueState: DueState | null;
   flag: string | null;
   selected: boolean;
   expanded: boolean;
@@ -34,7 +43,18 @@ interface Props {
   note: string | null;
   error: RowError | null;
   onRetry: () => void;
+  onCancel: () => void;
+  onReopen: (truckId: string, mode: ReopenMode) => void;
+  /** On a failed delivery: the truck it was on. */
+  oldTruck: Truck | null;
+  oldDriver: string | null;
+  cancelling: boolean;
+  cancelError: string | null;
+  /** Assigned or in transit on a truck that has no driver (e.g. its driver was removed). */
+  noDriver: boolean;
 }
+
+const CANCELLABLE = new Set(['pending', 'assigned', 'in_transit', 'failed']);
 
 export function DeliveryRow(p: Props) {
   const { d, detail, config } = p;
@@ -44,11 +64,13 @@ export function DeliveryRow(p: Props) {
   // On a pending delivery the job is assigning: the details wait behind a toggle so the assign
   // panel isn't pushed out of the (short) list pane. Other statuses show them straight away.
   const [showDetails, setShowDetails] = useState(d.status !== 'pending');
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const details = showDetails || d.status !== 'pending';
   const stops = detail?.stops ?? [];
   const cur = currentStopIndex(stops);
   // Events come oldest first; the row shows newest first.
   const events = detail ? [...detail.events].reverse() : [];
+  const etaAt = new Map((detail?.eta?.stops ?? []).map((x) => [x.stop_id, x.at]));
   const link = detail ? `${typeof window !== 'undefined' ? window.location.origin : ''}/t/${detail.delivery.tracking_token}` : null;
 
   return (
@@ -74,6 +96,12 @@ export function DeliveryRow(p: Props) {
             <StatusPill status={d.status} size="sm" />
           </span>
           <span className="t-body-sm text-ink-muted">{p.line2}</span>
+          {p.due && (
+            <span className={`t-body-sm ${p.dueState === 'late' || p.dueState === 'at_risk' ? 'font-bold text-attention' : 'text-ink-muted'}`}>
+              {p.dueState === 'late' ? 'Late · ' : p.dueState === 'at_risk' ? 'At risk · ' : ''}
+              {p.due}
+            </span>
+          )}
           {p.flag && (
             <span className="t-body-sm flex items-center gap-1.5 font-bold text-attention">
               <TriangleAlert size={14} strokeWidth={2.75} aria-hidden="true" />
@@ -100,6 +128,22 @@ export function DeliveryRow(p: Props) {
             </span>
           )}
 
+          {d.status === 'failed' && detail && (
+            <SendAgainPanel
+              stops={detail.stops}
+              events={detail.events}
+              oldTruck={p.oldTruck}
+              oldDriver={p.oldDriver}
+              candidates={p.candidates}
+              availableCount={p.availableCount}
+              hover={p.hover}
+              busy={p.assigning}
+              config={config}
+              onHover={p.onHover}
+              onReopen={p.onReopen}
+            />
+          )}
+
           {d.status === 'pending' && detail && (
             <AssignPanel
               candidates={p.candidates}
@@ -114,20 +158,29 @@ export function DeliveryRow(p: Props) {
 
           {p.error?.conflict && (
             <div role="alert" className="flex flex-col gap-1 rounded-md border border-status-failed bg-status-failed-bg px-3 py-2.5">
-              <span className="t-body-sm font-bold">Couldn&apos;t assign — the list was out of date</span>
-              <span className="t-mono">409 · {p.error.message}</span>
-              <span className="t-body-sm">The truck list has been refreshed. Pick another truck.</span>
+              <span className="t-body-sm font-bold">Couldn&apos;t {d.status === 'failed' ? 'send it out again' : 'assign'}</span>
+              <span className="t-body-sm">{p.error.message}</span>
+              <span className="t-body-sm">The truck list has been refreshed. Pick another option or truck.</span>
             </div>
           )}
           {p.error && !p.error.conflict && (
             <div role="alert" className="flex flex-col items-start gap-2 rounded-md border border-status-failed bg-status-failed-bg px-3 py-2.5">
-              <span className="t-body-sm font-bold">Couldn&apos;t assign</span>
+              <span className="t-body-sm font-bold">Couldn&apos;t {d.status === 'failed' ? 'send it out again' : 'assign'}</span>
               <span className="t-mono">{p.error.message}</span>
               <button type="button" onClick={p.onRetry} className="min-h-11 rounded-md border border-border bg-surface-100 px-3 text-[13px] font-semibold text-ink">
                 Retry
               </button>
             </div>
           )}
+          {p.noDriver && (
+            <div role="alert" className="t-body-sm flex flex-col items-start gap-1 rounded-md border border-status-failed bg-status-failed-bg px-3 py-2.5">
+              <span className="font-bold">This truck has no driver</span>
+              <span>
+                Nobody can start or finish this delivery. <Link href="/console/fleet">Give the truck a driver in Fleet</Link>, or cancel the delivery and assign another truck.
+              </span>
+            </div>
+          )}
+
           {p.note && (
             <div role="status" className="t-body-sm rounded-md border border-status-completed bg-status-completed-bg px-3 py-2.5 font-semibold">
               {p.note}
@@ -160,6 +213,20 @@ export function DeliveryRow(p: Props) {
                   <dd className="wrap-anywhere m-0">{detail.delivery.goods_desc}</dd>
                 </>
               )}
+              <dt className="text-ink-muted">Due by</dt>
+              <dd className="m-0">
+                {d.status === 'completed' || d.status === 'cancelled' ? (
+                  detail.delivery.due_by ? t(detail.delivery.due_by) : 'No time promised'
+                ) : (
+                  <DueEdit id={d.id} dueBy={detail.delivery.due_by} config={config} />
+                )}
+              </dd>
+              {detail.eta && (
+                <>
+                  <dt className="text-ink-muted">Arrival</dt>
+                  <dd className="m-0">ETA {t(detail.eta.arrival)} at the last stop · estimate</dd>
+                </>
+              )}
               <dt className="text-ink-muted">Customer link</dt>
               <dd className="m-0 min-w-0">
                 <a href={link!} target="_blank" rel="noreferrer" className="t-mono wrap-anywhere">
@@ -183,6 +250,7 @@ export function DeliveryRow(p: Props) {
                   else if (skipped) time = 'Skipped';
                   else if (s.status === 'arrived' && s.arrived_at) time = `Arrived ${t(s.arrived_at)}`;
                   else if (d.status === 'cancelled') time = 'Cancelled';
+                  else if (etaAt.has(s.id)) time = `${isCur && d.status === 'in_transit' ? 'Next · ' : ''}ETA ${t(etaAt.get(s.id)!)}`;
                   else if (isCur && d.status === 'in_transit') time = 'Next';
                   else time = 'Not yet';
                   return (
@@ -206,6 +274,7 @@ export function DeliveryRow(p: Props) {
                         <span className="t-body-sm font-semibold" style={{ color: isCur ? 'var(--status-transit)' : 'var(--ink-muted)' }}>
                           {time}
                         </span>
+                        <ProofView deliveryId={d.id} stop={s} config={config} />
                       </div>
                     </li>
                   );
@@ -213,6 +282,46 @@ export function DeliveryRow(p: Props) {
               </ol>
             </div>
           )}
+
+          {CANCELLABLE.has(d.status) &&
+            (confirmCancel ? (
+              <div role="group" aria-label={`Cancel ${d.reference}?`} className="flex flex-col gap-2 rounded-md border border-border bg-surface-200 px-3 py-2.5">
+                <span className="t-body-sm font-semibold">
+                  Cancel {d.reference}?{' '}
+                  {d.status === 'pending'
+                    ? 'It comes off the list of deliveries to assign.'
+                    : d.status === 'failed'
+                      ? 'It won’t be sent out again, and moves to History. This can’t be undone.'
+                      : 'The truck is freed and the driver stops seeing it. This can’t be undone.'}
+                </span>
+                {p.cancelError && (
+                  <span role="alert" className="t-body-sm font-semibold text-attention">
+                    {p.cancelError}
+                  </span>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setConfirmCancel(false)} className="min-h-11 rounded-md border border-border bg-surface-100 px-3 text-[13px] font-semibold text-ink">
+                    Keep it
+                  </button>
+                  <button
+                    type="button"
+                    disabled={p.cancelling}
+                    onClick={p.onCancel}
+                    className="min-h-11 rounded-md border-0 bg-status-failed px-3.5 text-[13px] font-semibold text-surface-100 disabled:opacity-45"
+                  >
+                    {p.cancelling ? 'Cancelling…' : 'Yes, cancel delivery'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmCancel(true)}
+                className="min-h-11 self-start rounded-md border border-border bg-surface-100 px-3 text-[13px] font-semibold text-ink"
+              >
+                Cancel delivery…
+              </button>
+            ))}
 
           {details && events.length > 0 && (
             <div className="flex flex-col gap-1">

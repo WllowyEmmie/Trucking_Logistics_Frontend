@@ -49,6 +49,20 @@ export interface Stop {
   /** The site contact at this stop, when one was given on create. Falls back to the customer. */
   contact_name: string | null;
   contact_phone: string | null;
+  /** Proof of delivery at a drop-off that has one. Images: GET /deliveries/{id}/stops/{stopId}/proof/photo|signature. */
+  proof?: StopProof | null;
+}
+
+export interface StopProof {
+  receiver_name: string;
+  captured_at: string;
+  has_photo: boolean;
+  has_signature: boolean;
+  /** Where the phone was, when it knew. */
+  lat: number | null;
+  lng: number | null;
+  /** Who sent it: the driver's name, or the dispatcher's email. */
+  saved_by: string;
 }
 
 /** POST /deliveries returns a narrower stop row than GET /deliveries/{id}. */
@@ -66,7 +80,8 @@ export interface DeliveryEvent {
   id: number;
   /** Free-form on the server. Known values: created, assigned, in_transit,
    *  completed, cancelled, failed, stop_arrived, stop_completed, and
-   *  truck_maintenance (after a breakdown or accident failure). */
+   *  truck_maintenance (after a breakdown or accident failure), and reopened
+   *  (a failed delivery sent out again; see lib/reopen.ts). */
   event_type: string;
   /** On a `failed` event, the bare reason (see `failReasonOf`); on `assigned`, a human note. */
   note: string | null;
@@ -85,6 +100,39 @@ export interface DeliveryListItem {
   customer_name: string;
   truck_id: string | null;
   created_at: string;
+  /** Promised by (the last drop-off); null when no time was promised. */
+  due_by: string | null;
+  /** Estimated arrival at the last stop: assigned or in transit, with a truck position. See lib/due.ts. */
+  eta: string | null;
+  /** When it was completed, cancelled or failed; null while open. */
+  finished_at: string | null;
+}
+
+/** GET /deliveries/history: a finished delivery and how it got there. */
+export interface HistoryItem {
+  id: string;
+  reference: string;
+  customer_name: string;
+  status: 'completed' | 'cancelled' | 'failed';
+  created_at: string;
+  finished_at: string;
+  due_by: string | null;
+  /** Times it failed, and was sent out again, along the way. */
+  failures: number;
+  reopens: number;
+  first_fail_reason: FailReason | null;
+  /** The truck on the last assignment. */
+  plate: string | null;
+  /** Completed after its due time. */
+  late: boolean;
+}
+
+export type HistoryOutcome = '' | 'completed' | 'cancelled' | 'failed' | 'recovered' | 'late';
+
+export interface HistoryPage {
+  items: HistoryItem[];
+  /** Pass as `before` for the next page; null on the last. */
+  next: string | null;
 }
 
 /** The `delivery` object inside GET /deliveries/{id}. */
@@ -104,14 +152,23 @@ export interface DeliveryDetail {
   truck_lat: number | null;
   truck_seen_at: string | null;
   created_at: string;
+  due_by: string | null;
 }
 
-/** GET /deliveries/{id} — three siblings, not a nested object. */
+/** Estimated arrival at each stop still to do, and at the last one. */
+export interface DeliveryEta {
+  arrival: string;
+  stops: { stop_id: string; at: string }[];
+}
+
+/** GET /deliveries/{id} — siblings, not a nested object. */
 export interface DeliveryDetailResponse {
   delivery: DeliveryDetail;
   stops: Stop[];
   /** Oldest first. */
   events: DeliveryEvent[];
+  /** Null unless it's on the road and the truck has a position. */
+  eta: DeliveryEta | null;
 }
 
 /** POST /deliveries */
@@ -119,6 +176,8 @@ export interface CreateDeliveryRequest {
   customer_name: string;
   customer_phone?: string | null;
   goods_desc?: string | null;
+  /** ISO time; optional. */
+  due_by?: string | null;
   stops: Array<{
     stop_type: StopKind;
     address: string;
@@ -155,6 +214,8 @@ export interface Truck {
   lng: number | null;
   lat: number | null;
   last_seen_at: string | null;
+  /** Whether its driver is on shift (GPS is only recorded then). False with no driver. */
+  driver_on_shift?: boolean;
 }
 
 export interface CreateTruckRequest {
@@ -180,11 +241,20 @@ export interface Driver {
   id: string;
   name: string;
   phone: string;
+  /** Whether the driver can sign in to the app yet (GET /drivers, dispatchers). Never the PIN. */
+  has_pin?: boolean;
+  /** On shift now (their phone sends GPS only then), and since when. */
+  on_shift?: boolean;
+  shift_since?: string | null;
 }
 
 export interface CreateDriverRequest {
   name: string;
   phone: string;
+  /** Optional: 4–8 digits, so the driver can sign in to the app straight away. */
+  pin?: string;
+  /** Optional: have the API make a random 6-digit PIN, returned once as `pin` in the response. */
+  generate_pin?: boolean;
 }
 
 // ---- Locations: POST /locations ----
@@ -216,6 +286,8 @@ export interface TrackStop {
   lat: number | null;
   status: StopStatus;
   arrived_at: string | null;
+  /** Who received it, at a drop-off that has proof. Images: GET /track/{token}/stops/{seq}/photo|signature. */
+  proof?: { receiver_name: string; captured_at: string; has_photo: boolean; has_signature: boolean } | null;
 }
 
 /** /track events (TrackingEvent): no `id` and no `stop_id`, unlike /deliveries/{id} events. */
@@ -237,6 +309,9 @@ export interface TrackResponse {
   truck_lng: number | null;
   truck_lat: number | null;
   truck_seen_at: string | null;
+  due_by: string | null;
+  /** Estimated arrival at the last stop, while it's on the road. */
+  eta: string | null;
   /** Every stop on the delivery. They all belong to the one customer holding the link. */
   stops: TrackStop[];
   /** Oldest first. The failure reason, when there is one, is in the note of
@@ -257,27 +332,51 @@ export interface GeocodePlace {
 // ---- Config: GET /config ----
 
 export interface Config {
+  /** ISO country the settings were filled from ("NG"); the default for phone numbers. */
+  country: string;
   /** 'metric' | 'imperial' — not 'km' | 'mi'. */
   units: 'metric' | 'imperial';
   /** IANA name, e.g. "Africa/Lagos". */
   timezone: string;
-  /** BCP-47, e.g. "en". */
+  /** BCP-47, e.g. "en-NG". */
   language: string;
   center_lat: number;
   center_lng: number;
   default_zoom: number;
-  /** A bounding box, not a radius. Defaults to the whole world when the
-   *  operator has not configured a service area. */
+  /** A bounding box, not a radius. The whole world when no service area is set. */
   min_lat: number;
   max_lat: number;
   min_lng: number;
   max_lng: number;
+  operator_name: string;
+  /** E.164, or "" when not set. */
+  support_phone: string;
+  dispatch_phone: string;
+  /** Pre-fills the pickup of a new delivery. */
+  depot: { address: string; lat: number; lng: number } | null;
+  agent_enabled: boolean;
+  stale_minutes: number;
+  pending_minutes: number;
+  failed_window_minutes: number;
+  ping_seconds: number;
+  /** Arrival estimates: average road speed, and minutes spent at each stop. */
+  eta_speed_kph: number;
+  stop_minutes: number;
+  /** Hours completed and cancelled deliveries stay on the console before they're only in History. */
+  board_hours: number;
+  /** Proof at each drop-off: the receiver's name always; these add a photo and a signature. */
+  pod_photo_required: boolean;
+  pod_signature_required: boolean;
+  /** The tracking page's Delivery terms and Help tabs. {company} and {support_phone} are filled in. */
+  customer_terms: string;
+  customer_faq: { q: string; a: string }[];
+  /** null until someone saves settings (environment defaults in effect). */
+  updated_at?: string | null;
+  /** Dispatchers only. */
+  updated_by?: string;
 }
 
-/** Client-side thresholds. The backend does not serve these and cannot
- *  receive them — config is read from the environment at startup, so there
- *  is no write path. Keep them here until that changes.
- *  TODO(config-thresholds) */
+/** The alert thresholds used until GET /config answers. */
 export const THRESHOLDS = {
   stale_minutes: 20,
   pending_minutes: 120,
@@ -307,7 +406,11 @@ export interface Proposal {
   delivery_id: string | null;
   truck_id: string | null;
   /** Approving runs this server-side (assignTruckTx): the console doesn't call /assign itself. */
-  action: { type: 'assign'; delivery_id: string; truck_id: string } | null;
+  /** assign: a pending delivery. reopen: a failed one going out again (see lib/reopen.ts). */
+  action:
+    | { type: 'assign'; delivery_id: string; truck_id: string }
+    | { type: 'reopen'; mode: 'resume' | 'handover' | 'restart'; delivery_id: string; truck_id: string }
+    | null;
   changes: ProposalChange[];
   created_at: string;
   decided_at: string | null;

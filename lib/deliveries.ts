@@ -15,8 +15,12 @@ export const detailKey = (id: string) => ['delivery', id] as const;
 
 export const fetchDetail = (id: string) => api<DeliveryDetailResponse>(`/deliveries/${encodeURIComponent(id)}`);
 
-export function useDeliveries(refetchMs = 15_000) {
-  return useQuery({ queryKey: DELIVERIES_KEY, queryFn: () => api<DeliveryListItem[]>('/deliveries'), refetchInterval: refetchMs });
+/** Refetched every minute as a backstop: the console hears changes at once over the socket
+ *  (lib/positions.ts); the driver app, which has no socket, asks for 15 s.
+ *  The console's list: everything open, failed ones until they're dealt with, and completed or
+ *  cancelled ones for the Settings window (board_hours). Older ones are in History. */
+export function useDeliveries(refetchMs = 60_000) {
+  return useQuery({ queryKey: DELIVERIES_KEY, queryFn: () => api<DeliveryListItem[]>('/deliveries?board=1'), refetchInterval: refetchMs });
 }
 
 export function useDeliveryDetail(id: string | null, refetchMs: number | false = 15_000) {
@@ -71,6 +75,12 @@ function stopLabel(e: DeliveryEvent, stops?: Stop[]): string {
   return s ? `stop ${s.sequence}` : 'a stop';
 }
 
+/** The due_changed note is an ISO time; shown in UTC here since the row has no zone to hand. */
+const dueNote = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : `${d.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+};
+
 /** Dispatcher wording for an event row. */
 export function eventText(e: DeliveryEvent, stops?: Stop[]): string {
   switch (e.event_type) {
@@ -92,6 +102,12 @@ export function eventText(e: DeliveryEvent, stops?: Stop[]): string {
       return 'Truck sent to the workshop';
     case 'cancelled':
       return 'Cancelled';
+    case 'proof':
+      return `Signed for at ${stopLabel(e, stops)}${e.note ? ` · ${e.note}` : ''}`;
+    case 'due_changed':
+      return e.note ? `Due time set to ${dueNote(e.note)}` : 'Due time cleared';
+    case 'reopened':
+      return 'Sent out again' + (e.note ? ` · ${e.note.replace(/^back to pending by /, 'by ')}` : '');
     default:
       return cap(e.event_type.replace(/_/g, ' ')) + (e.note ? ` · ${e.note}` : '');
   }
@@ -115,6 +131,8 @@ export function customerEventText(e: TrackEvent, plate: string | null): string |
       return 'Delivered';
     case 'failed':
       return `Not delivered — ${reasonLabel(e.note)}`;
+    case 'proof':
+      return e.note ? `Signed for · ${e.note}` : 'Signed for';
     case 'cancelled':
       return 'Delivery cancelled';
     default:

@@ -52,7 +52,10 @@ export default function DonePage() {
   if (detail) rows.push(['Stops delivered', `${failed ? delivered : drops.length} of ${drops.length}`]);
   rows.push(['Problems reported', reason ? (FAIL_REASONS.find((r) => r.key === reason)?.label ?? 'Other') : 'None']);
   if (started) rows.push(['Started', time(started)]);
-  if (p.podName) rows.push(['Signed for by', p.podName]);
+  const signed = Object.entries(p.received ?? {});
+  if (signed.length === 1) rows.push(['Signed for by', signed[0]![1]]);
+  else for (const [seq, name] of signed) rows.push([`Stop ${seq} signed by`, name]);
+  if (!signed.length && p.podName) rows.push(['Signed for by', p.podName]);
 
   return (
     <DriverScreen

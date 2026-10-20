@@ -47,6 +47,8 @@ function Elapsed({ since }: { since: number }) {
 function failure(e: ApiError): { title: string; hint: string } {
   if (e.status === 0) return { title: 'The agent is unreachable', hint: 'It may not be running. Everything else in the console works without it.' };
   if (e.status === TIMED_OUT) return { title: 'The agent took too long', hint: 'It may be overloaded, or its model provider is slow.' };
+  // A 4xx is about the question, not the agent's health: "out of credits" would send people the wrong way.
+  if (e.status >= 400 && e.status < 500) return { title: "The agent couldn't take that question", hint: 'Try asking it a shorter or simpler way.' };
   return { title: "The agent couldn't answer", hint: 'It may be out of credits, or its model provider is down.' };
 }
 
@@ -100,6 +102,8 @@ export function AskBox() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            // The agent refuses longer questions (422).
+            maxLength={1000}
             placeholder="Which trucks are free?"
             aria-label="Ask the agent about deliveries and trucks"
             className="min-h-10 min-w-0 flex-1 border-0 bg-transparent text-[14px] text-ink outline-offset-0"

@@ -2,12 +2,13 @@
 
 // Driver offline queue. Every state-changing action is written to IndexedDB first, then sent.
 // Flushes strictly in order: on enqueue, on `online`, and when the app opens.
-// A 4xx (including 409) drops the item and keeps its message to show; a 5xx or network error keeps
-// it at the head of the queue and stops the flush.
+// A 4xx (including 409) drops the item and keeps its message to show; a 5xx, a 401/408/429 or a
+// network error keeps it at the head of the queue and stops the flush. A 401 is a lapsed sign-in:
+// the driver signs in again and the queue carries on from where it was.
 
 import { ApiError, post } from './api';
 
-export type QueueKind = 'start' | 'complete' | 'fail' | 'locations' | 'stop';
+export type QueueKind = 'start' | 'complete' | 'fail' | 'locations' | 'stop' | 'shift' | 'proof';
 
 export interface QueueItem {
   id?: number;
@@ -115,8 +116,9 @@ async function flush(): Promise<void> {
           await post(it.path, it.body);
         } catch (e) {
           const status = e instanceof ApiError ? e.status : 0;
-          if (status >= 400 && status < 500) {
-            dropped = { item: it, message: `${it.label}: ${status === 409 ? '409 · ' : ''}${(e as Error).message}` };
+          // 401, 408 and 429 mean "try again later", not "refused": dropping them would lose a step.
+          if (status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429) {
+            dropped = { item: it, message: `${it.label}: ${(e as Error).message}` };
           } else {
             set({ networkDown: status === 0 });
             return;

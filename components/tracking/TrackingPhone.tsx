@@ -9,8 +9,8 @@ import type { TrackingView } from './view';
 
 export const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`;
 
-/** `ask`: the customer's question box, when the agent is on (the page decides). */
-export function TrackingPhone({ v, fitKey, seconds, ask }: { v: TrackingView; fitKey: string; seconds: number; ask?: ReactNode }) {
+/** `ask`: the customer's question box, when the agent is on (the page decides). `terms`: the small-print notice. */
+export function TrackingPhone({ v, fitKey, seconds, ask, terms }: { v: TrackingView; fitKey: string; seconds: number; ask?: ReactNode; terms?: ReactNode }) {
   const found = v.state !== 'not_found';
   return (
     <div className="flex min-h-dvh flex-col bg-surface-100 text-ink">
@@ -62,6 +62,8 @@ export function TrackingPhone({ v, fitKey, seconds, ask }: { v: TrackingView; fi
             {v.eta.detail && <span className="t-body text-ink-muted">{v.eta.detail}</span>}
           </div>
         )}
+
+        {terms}
 
         {ask}
 

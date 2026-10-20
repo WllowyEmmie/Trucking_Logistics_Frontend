@@ -64,7 +64,8 @@ export default function ContactPage() {
             return at ? (
               <div key={text} aria-disabled="true" className={`${rowCls} border-status-completed bg-status-completed-bg text-ink`}>
                 <span>{text}</span>
-                <span className="t-driver-meta flex-none text-status-completed">Sent {time(at)}</span>
+                {/* The tap opens the phone's Messages app; whether the driver pressed send there isn't known. */}
+                <span className="t-driver-meta flex-none text-status-completed">Opened {time(at)}</span>
               </div>
             ) : (
               <a

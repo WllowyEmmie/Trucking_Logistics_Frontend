@@ -19,7 +19,14 @@ export function GpsStrip({ allSent }: { allSent?: boolean }) {
   const offline = !online || queue.networkDown;
 
   let left: ReactNode;
-  if (gps.state === 'denied' || gps.state === 'unsupported') {
+  if (gps.state === 'off') {
+    left = (
+      <>
+        {dot('transparent', '2px solid var(--border)')}
+        Off shift · GPS off
+      </>
+    );
+  } else if (gps.state === 'denied' || gps.state === 'unsupported') {
     left = (
       <>
         {dot('transparent', '2px solid var(--attention)')}

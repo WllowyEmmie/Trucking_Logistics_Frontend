@@ -3,11 +3,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { useMemo } from 'react';
+import { fillIn, TermsNotice } from '@/components/tracking/CustomerInfo';
 import { AskDelivery } from '@/components/tracking/AskDelivery';
 import { TrackingDesktop } from '@/components/tracking/TrackingDesktop';
 import { TrackingPhone } from '@/components/tracking/TrackingPhone';
 import { buildTrackingView, NOT_FOUND_VIEW } from '@/components/tracking/view';
-import { api, isNotFound } from '@/lib/api';
+import { API_URL, api, isNotFound } from '@/lib/api';
 import { useConfig } from '@/lib/config';
 import { viewerTimeZone } from '@/lib/format';
 import type { TrackResponse } from '@/lib/types';
@@ -43,6 +44,7 @@ export default function TrackingPage() {
       operator: config.operator_name,
       phone: config.support_phone || null,
       operatorTz: config.timezone,
+      imageBase: `${API_URL}/track/${encodeURIComponent(token)}/stops`,
     });
   }, [q.data, q.error, q.dataUpdatedAt, now, config]);
 
@@ -68,13 +70,20 @@ export default function TrackingPage() {
 
   const fitKey = `${token}:${view.state}`;
   // Questions about this delivery, answered by the agent from this link's tracking data only.
+  // The operator's help questions are answered by the agent (it has the answers); the first few
+  // show as suggestions to tap.
+  const phone = config.support_phone || null;
+  const found = view.state !== 'not_found';
+  const suggestions = config.customer_faq.slice(0, 4).map((x) => fillIn(x.q, config.operator_name, phone));
   const ask =
-    config.agent_enabled && view.state !== 'not_found' ? (
-      <AskDelivery token={token} operator={config.operator_name} phone={config.support_phone || null} desktop={desktop} />
+    config.agent_enabled && found ? (
+      <AskDelivery token={token} operator={config.operator_name} phone={phone} desktop={desktop} suggestions={suggestions} />
     ) : null;
+  const terms =
+    found && config.customer_terms.trim() ? <TermsNotice terms={config.customer_terms} company={config.operator_name} phone={phone} /> : null;
   return desktop ? (
-    <TrackingDesktop v={view} fitKey={fitKey} seconds={config.ping_seconds} ask={ask} />
+    <TrackingDesktop v={view} fitKey={fitKey} seconds={config.ping_seconds} ask={ask} terms={terms} />
   ) : (
-    <TrackingPhone v={view} fitKey={fitKey} seconds={config.ping_seconds} ask={ask} />
+    <TrackingPhone v={view} fitKey={fitKey} seconds={config.ping_seconds} ask={ask} terms={terms} />
   );
 }

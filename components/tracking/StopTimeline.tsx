@@ -37,6 +37,7 @@ export function StopTimeline({ stops, desktop }: { stops: TimelineStop[]; deskto
                   {s.time}
                 </span>
               )}
+              {s.proof && <ProofLine proof={s.proof} />}
             </div>
             {desktop && (
               <span className="t-body pt-3.5 text-end font-semibold" style={{ color: tc }}>
@@ -47,5 +48,28 @@ export function StopTimeline({ stops, desktop }: { stops: TimelineStop[]; deskto
         );
       })}
     </ol>
+  );
+}
+
+/** Who received it, the signature on white (it's dark ink on a transparent image), and the photo. */
+export function ProofLine({ proof }: { proof: NonNullable<TimelineStop['proof']> }) {
+  return (
+    <div className="mt-1.5 flex flex-col gap-2">
+      <span className="t-body-sm font-semibold">{proof.text}</span>
+      {(proof.signature || proof.photo) && (
+        <div className="flex flex-wrap items-end gap-3">
+          {proof.signature && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={proof.signature} alt="Receiver's signature" className="h-16 w-auto rounded-md border border-border bg-white p-1" />
+          )}
+          {proof.photo && (
+            <a href={proof.photo} target="_blank" rel="noreferrer" aria-label="Open the delivery photo">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={proof.photo} alt="Delivery photo" className="h-16 w-16 rounded-md border border-border object-cover" />
+            </a>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

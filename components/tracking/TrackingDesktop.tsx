@@ -8,8 +8,8 @@ import { StopTimeline } from './StopTimeline';
 import { telHref } from './TrackingPhone';
 import type { TrackingView } from './view';
 
-/** `ask`: the customer's question box, when the agent is on (the page decides). */
-export function TrackingDesktop({ v, fitKey, seconds, ask }: { v: TrackingView; fitKey: string; seconds: number; ask?: ReactNode }) {
+/** `ask`: the customer's question box, when the agent is on (the page decides). `terms`: the small-print notice. */
+export function TrackingDesktop({ v, fitKey, seconds, ask, terms }: { v: TrackingView; fitKey: string; seconds: number; ask?: ReactNode; terms?: ReactNode }) {
   const found = v.state !== 'not_found';
   return (
     <div className="flex h-dvh bg-surface-100 text-ink">
@@ -83,6 +83,8 @@ export function TrackingDesktop({ v, fitKey, seconds, ask }: { v: TrackingView; 
               ))}
             </dl>
           )}
+
+          {terms}
 
           {ask}
 

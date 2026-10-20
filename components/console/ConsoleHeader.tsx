@@ -5,15 +5,20 @@ import { useState } from 'react';
 import type { AppConfig } from '@/lib/config';
 import type { ExceptionRow } from '@/lib/exceptions';
 import { formatDuration } from '@/lib/format';
+import { AccountMenu } from '@/components/auth/AccountMenu';
 import { DispatchNav } from './DispatchNav';
-import { ExceptionTable } from './ExceptionTable';
+import { DismissedList, ExceptionTable } from './ExceptionTable';
 
 interface Props {
   config: AppConfig;
   clock: string;
   exceptions: ExceptionRow[];
+  /** Dismissed with ×: out of the count, listed on request with Restore. */
+  dismissed: ExceptionRow[];
   stacked: boolean;
   onView: (x: ExceptionRow) => void;
+  onDismiss: (x: ExceptionRow) => void;
+  onRestore: (x: ExceptionRow) => void;
 }
 
 const OPEN_KEY = 'console-attention-open';
@@ -25,6 +30,7 @@ function rulesLine(cfg: AppConfig): string {
     `Silent ${cfg.stale_minutes}+ min`,
     `pending ${formatDuration(cfg.pending_minutes)}+ with trucks free`,
     `failed in ${failed}`,
+    'late or at risk of missing its due time',
   ];
   if (cfg.agent_enabled) parts.push('agent-raised');
   return parts.join(' · ');
@@ -44,7 +50,8 @@ function readOpen(): boolean {
  * counts: the list's filter chips already show them, next to the list they filter. The exception table only takes space when it's opened, like the proposals
  * pane; the count stays visible (in the attention colour) while it's closed.
  */
-export function ConsoleHeader({ config, clock, exceptions, stacked, onView }: Props) {
+export function ConsoleHeader({ config, clock, exceptions, dismissed, stacked, onView, onDismiss, onRestore }: Props) {
+  const [showDismissed, setShowDismissed] = useState(false);
   const [open, setOpenState] = useState(readOpen);
   const setOpen = (v: boolean) => {
     setOpenState(v);
@@ -85,6 +92,8 @@ export function ConsoleHeader({ config, clock, exceptions, stacked, onView }: Pr
             <ChevronDown size={16} strokeWidth={2.5} aria-hidden="true" style={{ transform: open ? 'rotate(180deg)' : 'none' }} />
           </button>
           <span className="t-mono ps-1 text-ink-muted">{clock}</span>
+          <span aria-hidden="true" className="mx-1 h-6 border-s border-divider" />
+          <AccountMenu />
         </div>
       </div>
 
@@ -92,9 +101,22 @@ export function ConsoleHeader({ config, clock, exceptions, stacked, onView }: Pr
         <div id="attention-panel" className="flex flex-col gap-1.5 border-t border-divider px-4 pt-2 pb-3">
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
             <h2 className="t-h3 m-0">Needs attention · {n}</h2>
-            <span className="t-body-sm text-ink-muted">{rulesLine(config)}</span>
+            <span className="flex flex-wrap items-center gap-x-3">
+              <span className="t-body-sm text-ink-muted">{rulesLine(config)}</span>
+              {dismissed.length > 0 && (
+                <button
+                  type="button"
+                  aria-expanded={showDismissed}
+                  onClick={() => setShowDismissed((v) => !v)}
+                  className="t-body-sm min-h-11 rounded-md border-0 bg-transparent px-1 font-semibold text-ink underline underline-offset-2"
+                >
+                  {showDismissed ? 'Hide' : 'Show'} {dismissed.length} dismissed
+                </button>
+              )}
+            </span>
           </div>
-          <ExceptionTable rows={exceptions} stacked={stacked} onView={onView} />
+          <ExceptionTable rows={exceptions} stacked={stacked} onView={onView} onDismiss={onDismiss} />
+          {showDismissed && dismissed.length > 0 && <DismissedList rows={dismissed} onRestore={onRestore} />}
         </div>
       )}
     </header>

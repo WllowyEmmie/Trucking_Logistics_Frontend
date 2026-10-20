@@ -35,6 +35,26 @@ function Fit({ fitKey, points }: { fitKey?: string; points?: LatLng[] }) {
   return null;
 }
 
+/**
+ * MapContainer reads `center` and `zoom` once. The console first renders with the defaults (0, 0)
+ * and gets the operator's centre from GET /config a moment later, so follow later changes too, as
+ * long as there are no points to fit (those decide the view instead).
+ */
+function Recenter({ center, zoom, hasFit }: { center: LatLng; zoom?: number; hasFit: boolean }) {
+  const map = useMap();
+  const first = useRef(true);
+  const hasFitRef = useRef(hasFit);
+  hasFitRef.current = hasFit;
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (!hasFitRef.current) map.setView([center.lat, center.lng], zoom ?? map.getZoom());
+  }, [center.lat, center.lng, zoom, map]);
+  return null;
+}
+
 /** Leaflet measures once; panes that were hidden (tabs) need a re-measure when shown. */
 function AutoResize({ el }: { el: HTMLElement | null }) {
   const map = useMap();
@@ -86,6 +106,7 @@ export default function DispatchMap(p: DispatchMapProps) {
         {p.stops?.map((s) => <StopPin key={s.id} stop={s} />)}
         {p.trucks?.map((t) => <TruckMarker key={t.id} truck={t} seconds={p.animateSeconds} onClick={p.onTruck} />)}
         <Fit fitKey={p.fitKey} points={p.fitPoints} />
+        <Recenter center={p.center} zoom={p.zoom} hasFit={!!p.fitPoints?.length} />
         <AutoResize el={wrap} />
       </MapContainer>
 

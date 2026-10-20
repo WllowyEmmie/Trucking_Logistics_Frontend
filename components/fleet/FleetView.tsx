@@ -2,36 +2,24 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { Fragment, useState, type ReactNode } from 'react';
+import { AccountMenu } from '@/components/auth/AccountMenu';
 import { DispatchNav } from '@/components/console/DispatchNav';
 import { StatusPill } from '@/components/StatusPill';
+import { post } from '@/lib/api';
 import { useConfig } from '@/lib/config';
+import { formatWhen } from '@/lib/format';
 import { DRIVERS_KEY, useDrivers } from '@/lib/deliveries';
 import { TRUCKS_KEY, usePositions } from '@/lib/positions';
 import type { Driver, Truck } from '@/lib/types';
 import { AddDriverForm } from './AddDriverForm';
 import { AddTruckForm } from './AddTruckForm';
+import { DriverPinEdit } from './DriverPinEdit';
 import { TruckEdit } from './TruckEdit';
 
 type Tab = 'trucks' | 'drivers';
 
 const TRUCK_COLS = 'minmax(90px,.7fr) minmax(0,1.4fr) minmax(110px,.8fr) minmax(0,1fr) 72px';
-const DRIVER_COLS = 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr)';
-
-const NOTES: Record<Tab, string[]> = {
-  trucks: [
-    'Plate is the only required field and matches POST /trucks. Duplicates come back as 409 and are shown word for word.',
-    'Model is optional in the API and helps dispatchers tell vans from rigids at a glance.',
-    '"Starts as" avoids a new truck showing as Available before it has passed its checks. In maintenance is set with PATCH /trucks/{id} right after it is added.',
-    'Edit a truck to bring it back from maintenance (a breakdown or accident puts it there), take it offline, or change its usual driver. A truck on a delivery keeps its status until the delivery ends.',
-    'Payload and pallet spaces need new fields on /trucks.',
-  ],
-  drivers: [
-    'Name and phone are required and match POST /drivers. A phone already on file comes back as 409.',
-    'Phone is stored in international format so dispatch can call from anywhere.',
-    "Usual truck is the truck's driver_id, set with PATCH /trucks/{id} once the driver is added. Only trucks with no usual driver are offered; change it later from the truck's Edit.",
-    'Texting the driver a link to the app needs a backend endpoint.',
-  ],
-};
+const DRIVER_COLS = 'minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) minmax(0,.8fr) 88px';
 
 interface Row {
   key: string;
@@ -121,7 +109,43 @@ export function FleetView() {
               <span key="t" className={`t-body-sm wrap-anywhere ${plate ? '' : 'text-ink-muted'}`}>
                 {plate ?? 'Assigned per delivery'}
               </span>,
+              <span key="a" className="flex flex-col items-start gap-1">
+                <span className={`t-body-sm ${d.has_pin ? '' : 'font-semibold text-attention'}`}>{d.has_pin ? 'Can sign in' : 'No PIN yet'}</span>
+                {d.on_shift ? (
+                  <span className="t-body-sm flex flex-wrap items-center gap-x-2 font-semibold">
+                    On shift{d.shift_since ? ` since ${formatWhen(d.shift_since, config.timezone, config.locale)}` : ''}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`End ${d.name}'s shift? Their phone stops sharing its location.`))
+                          void post(`/drivers/${encodeURIComponent(d.id)}/shift/end`)
+                            .catch((e: Error) => window.alert(e.message))
+                            .finally(() => void qc.invalidateQueries({ queryKey: DRIVERS_KEY }));
+                      }}
+                      className="min-h-8 rounded-md border border-border bg-surface-100 px-2 text-[12px] font-semibold text-ink"
+                    >
+                      End shift
+                    </button>
+                  </span>
+                ) : (
+                  <span className="t-body-sm text-ink-muted">Off shift</span>
+                )}
+              </span>,
+              <button
+                key="e"
+                type="button"
+                aria-expanded={editing === d.id}
+                aria-label={`${d.has_pin ? 'Reset' : 'Set'} ${d.name}'s PIN`}
+                onClick={() => setEditing(editing === d.id ? null : d.id)}
+                className="min-h-11 rounded-md border border-border bg-surface-100 px-3 text-[13px] font-semibold text-ink"
+              >
+                {editing === d.id ? 'Close' : d.has_pin ? 'Reset PIN' : 'Set PIN'}
+              </button>,
             ],
+            below:
+              editing === d.id ? (
+                <DriverPinEdit driver={d} onSaved={() => void qc.invalidateQueries({ queryKey: DRIVERS_KEY })} onClose={() => setEditing(null)} />
+              ) : undefined,
           };
         });
 
@@ -129,16 +153,17 @@ export function FleetView() {
   const loadError = isT ? trucksQ.error : driversQ.error;
   const title = isT ? 'Trucks' : 'Drivers';
   const searchHint = isT ? 'Plate, model or driver' : 'Name, phone or truck';
-  const heads = isT ? ['Plate', 'Model', 'Status', 'Usual driver', ''] : ['Name', 'Phone', 'Usual truck'];
+  const heads = isT ? ['Plate', 'Model', 'Status', 'Usual driver', ''] : ['Name', 'Phone', 'Usual truck', 'Driver app and shift', ''];
   const cols = isT ? TRUCK_COLS : DRIVER_COLS;
 
   return (
     <div className="flex min-h-dvh flex-col bg-surface-200 text-ink">
       <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-border bg-surface-100 px-6 py-3">
-        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           <span className="t-h2">{config.operator_name} · Dispatch</span>
           <DispatchNav current="/console/fleet" />
         </div>
+        <div className="flex flex-wrap items-center gap-3">
         <div role="tablist" aria-label="Fleet" className="flex gap-2">
           {(
             [
@@ -156,6 +181,7 @@ export function FleetView() {
                 onClick={() => {
                   setTab(k);
                   setQ('');
+                  setEditing(null);
                 }}
                 className={`inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-[14px] font-semibold ${
                   on ? 'border-2 border-ink bg-ink text-surface-100' : 'border border-border bg-surface-100 text-ink'
@@ -166,6 +192,9 @@ export function FleetView() {
               </button>
             );
           })}
+        </div>
+          <span aria-hidden="true" className="h-6 border-s border-divider" />
+          <AccountMenu />
         </div>
       </header>
 
@@ -264,14 +293,6 @@ export function FleetView() {
               }}
             />
           )}
-          <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-100 px-5 py-4">
-            <span className="t-h3">Why these fields</span>
-            <ul className="t-body-sm m-0 flex flex-col gap-1.5 ps-[18px] text-ink-muted">
-              {NOTES[tab].map((n) => (
-                <li key={n}>{n}</li>
-              ))}
-            </ul>
-          </div>
         </aside>
       </div>
     </div>

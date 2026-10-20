@@ -1,6 +1,7 @@
 import { http, HttpResponse, delay, ws } from 'msw';
 import { AGENT_URL, API_URL } from '@/lib/api';
 import { positionsSocketUrl, type WsMessage } from '@/lib/positions';
+import { mockAuth } from './auth';
 import { MockError, mock } from './data';
 
 // The Go API's routes (internal/api/routes.go), answered from mocks/data.ts.
@@ -78,12 +79,50 @@ const askAboutDelivery = http.post(`${AGENT_URL}/track/:token/ask`, async ({ par
   }
 });
 
+/** The API's /auth routes. */
+const authHandlers = [
+  http.get(u('/auth/me'), () => {
+    const me = mockAuth.me();
+    return me ? HttpResponse.json(me) : HttpResponse.json({ error: 'not signed in' }, { status: 401 });
+  }),
+  http.post(u('/auth/login'), async ({ request }) => {
+    const b = (await request.json().catch(() => ({}))) as { email?: string; password?: string };
+    const me = mockAuth.login(b.email ?? '', b.password ?? '');
+    return me ? HttpResponse.json(me) : HttpResponse.json({ error: 'wrong email or password' }, { status: 401 });
+  }),
+  http.post(u('/auth/driver-login'), async ({ request }) => {
+    const b = (await request.json().catch(() => ({}))) as { phone?: string; pin?: string };
+    const me = mockAuth.driverLogin(b.phone ?? '', b.pin ?? '');
+    return me ? HttpResponse.json(me) : HttpResponse.json({ error: 'wrong phone number or PIN' }, { status: 401 });
+  }),
+  http.post(u('/auth/logout'), () => {
+    mockAuth.logout();
+    return new HttpResponse(null, { status: 204 });
+  }),
+  http.post(u('/drivers/:id/pin/generate'), ({ params }) => {
+    if (!mock.drivers().some((d) => d.id === params.id)) return HttpResponse.json({ error: 'driver not found' }, { status: 404 });
+    const pin = String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0');
+    mockAuth.setPin(String(params.id), pin);
+    return HttpResponse.json({ pin }, { headers: { 'Cache-Control': 'no-store' } });
+  }),
+  http.post(u('/drivers/:id/pin'), async ({ request, params }) => {
+    const b = (await request.json().catch(() => ({}))) as { pin?: string };
+    if (!/^\d{4,8}$/.test(b.pin ?? '')) return HttpResponse.json({ error: 'PIN must be 4 to 8 digits' }, { status: 400 });
+    if (!mock.drivers().some((d) => d.id === params.id)) return HttpResponse.json({ error: 'driver not found' }, { status: 404 });
+    mockAuth.setPin(String(params.id), b.pin!);
+    return new HttpResponse(null, { status: 204 });
+  }),
+];
+
 export const handlers = [
+  ...authHandlers,
   positionsSocket,
   askAgent,
   askAboutDelivery,
   http.get(u('/health'), () => run(() => mock.health())),
   http.get(u('/config'), () => run(() => mock.config())),
+  http.put(u('/config'), ({ request }) => withBody<Parameters<typeof mock.saveConfig>[0]>(request, (b) => mock.saveConfig(b))),
+  http.post(u('/config/check'), ({ request }) => withBody<Parameters<typeof mock.checkArea>[0]>(request, (b) => mock.checkArea(b))),
   http.get(u('/geocode'), ({ request }) => run(() => mock.geocode(new URL(request.url).searchParams.get('q')))),
   http.get(u('/track/:token'), ({ params }) => run(() => mock.track(String(params.token)))),
 
@@ -95,14 +134,49 @@ export const handlers = [
     withBody<Parameters<typeof mock.updateTruck>[1]>(request, (b) => mock.updateTruck(String(params.id), b)),
   ),
 
-  http.get(u('/drivers'), () => run(() => mock.drivers())),
-  http.post(u('/drivers'), ({ request }) => withBody<Parameters<typeof mock.createDriver>[0]>(request, (b) => mock.createDriver(b), 201)),
+  // Every mock driver has a PIN (1234 unless changed), so all can sign in.
+  http.get(u('/drivers'), () => run(() => mock.drivers().map((d) => ({ ...d, has_pin: true })))),
+  http.post(u('/drivers'), ({ request }) =>
+    withBody<Parameters<typeof mock.createDriver>[0] & { pin?: string; generate_pin?: boolean }>(
+      request,
+      (b) => {
+        const d = mock.createDriver(b);
+        if (b.pin) mockAuth.setPin(d.id, b.pin);
+        if (b.generate_pin) {
+          const pin = String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0');
+          mockAuth.setPin(d.id, pin);
+          return { ...d, pin };
+        }
+        return d;
+      },
+      201,
+    ),
+  ),
 
-  http.get(u('/deliveries'), ({ request }) => run(() => mock.deliveries(new URL(request.url).searchParams.get('status')))),
+  http.get(u('/deliveries'), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    return run(() => mock.deliveries(q.get('status'), q.get('board') === '1'));
+  }),
+  http.get(u('/deliveries/history'), ({ request }) => run(() => mock.history(new URL(request.url).searchParams))),
   http.post(u('/deliveries'), ({ request }) => withBody<Parameters<typeof mock.createDelivery>[0]>(request, (b) => mock.createDelivery(b), 201)),
   http.get(u('/deliveries/:id'), ({ params }) => run(() => mock.delivery(String(params.id)))),
   http.post(u('/deliveries/:id/assign'), ({ request, params }) =>
     withBody<{ truck_id?: string }>(request, (b) => mock.assign(String(params.id), b.truck_id)),
+  ),
+  http.post(u('/deliveries/:id/reopen'), ({ request, params }) =>
+    withBody<{ mode?: string; truck_id?: string }>(request, (b) => mock.reopen(String(params.id), b.mode, b.truck_id)),
+  ),
+  http.post(u('/deliveries/:id/due'), ({ request, params }) =>
+    withBody<{ due_by?: string | null }>(request, (b) => mock.setDue(String(params.id), b.due_by)),
+  ),
+  // Driver shifts and proof of delivery (internal/api/shift.go, proof.go), kept simple.
+  http.post(u('/auth/me/shift'), ({ request }) =>
+    withBody<{ on?: boolean }>(request, (b) => ({ on_shift: !!b.on, since: b.on ? new Date().toISOString() : null })),
+  ),
+  http.post(u('/deliveries/:id/stops/:stopId/proof'), ({ request, params }) =>
+    withBody<{ receiver_name?: string; photo?: string | null; signature?: string | null }>(request, (b) =>
+      mock.saveProof(String(params.id), String(params.stopId), b),
+    ),
   ),
   http.post(u('/deliveries/:id/start'), ({ params }) => run(() => mock.start(String(params.id)))),
   http.post(u('/deliveries/:id/complete'), ({ params }) => run(() => mock.complete(String(params.id)))),

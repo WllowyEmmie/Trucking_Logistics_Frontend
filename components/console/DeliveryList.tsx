@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useEffect, useRef } from 'react';
 import type { AppConfig } from '@/lib/config';
 import { hasLatLng } from '@/lib/deliveries';
@@ -10,8 +12,13 @@ import type { CreateDeliveryResponse, DeliveryDetailResponse, DeliveryListItem, 
 import { AskBox } from './AskBox';
 import type { Candidate } from './AssignPanel';
 import { DeliveryRow, type RowError } from './DeliveryRow';
+import { dueLine, dueState } from '@/lib/due';
+import type { ReopenMode } from '@/lib/reopen';
 import { NewDeliveryForm } from './NewDeliveryForm';
 import { btnPrimary, btnSecondary, chipCls } from './ui';
+
+/** Trucks offered in the assign panel: room for every available truck in a small fleet. */
+const MAX_CANDIDATES = 8;
 
 export type DeliveryFilter = 'all' | 'active' | 'attention' | DeliveryStatus;
 
@@ -35,6 +42,8 @@ const RANK: Record<DeliveryStatus, number> = { pending: 0, in_transit: 1, assign
 
 export interface AssignError extends RowError {
   truckId: string;
+  /** Set when it was a send-again (reopen) that failed. */
+  mode?: ReopenMode;
 }
 
 interface Props {
@@ -66,6 +75,10 @@ interface Props {
   onToggle: (id: string) => void;
   onHover: (truckId: string | null) => void;
   onAssign: (deliveryId: string, truckId: string) => void;
+  onReopen: (deliveryId: string, truckId: string, mode: ReopenMode) => void;
+  onCancel: (deliveryId: string) => void;
+  cancellingId: string | null;
+  cancelErrors: Record<string, string>;
   onCreating: (open: boolean) => void;
   onCreated: (r: CreateDeliveryResponse) => void;
 }
@@ -79,7 +92,14 @@ export function DeliveryList(p: Props) {
     return t ? `${t.plate_number} · ${p.driverName(t.driver_id) ?? 'no driver'}` : 'Truck not found';
   };
   const plate = (id: string | null) => (id ? (T.get(id)?.plate_number ?? 'Truck not found') : 'No truck');
-  const available = trucks.filter((t) => t.status === 'available' && hasPosition(t) && !isStale(t, config, now));
+  // Every available truck can be assigned. Distance needs a fresh position, so those trucks are
+  // ranked by it; the rest still show, without a distance (the dispatcher may know where they are).
+  const available = trucks.filter((t) => t.status === 'available');
+  const located = available.filter((t) => hasPosition(t) && !isStale(t, config, now));
+  const unlocated = available
+    .filter((t) => !located.includes(t))
+    // Most recent position first; trucks that have never reported go last.
+    .sort((a, b) => (b.last_seen_at ? Date.parse(b.last_seen_at) : 0) - (a.last_seen_at ? Date.parse(a.last_seen_at) : 0));
 
   const byTruck = deliveries.filter((d) => !p.truckSel || d.truck_id === p.truckSel);
   let list = byTruck;
@@ -113,13 +133,24 @@ export function DeliveryList(p: Props) {
     }
   }
 
+  /** The nearest located trucks first, then the ones without a usable position. At most MAX_CANDIDATES. */
   function candidates(detail: DeliveryDetailResponse | undefined): Candidate[] {
     const pk = detail?.stops[0];
-    if (!pk || !hasLatLng(pk)) return [];
-    return available
-      .map((t) => ({ truck: t, km: haversineKm(pk, { lat: t.lat!, lng: t.lng! }), driver: p.driverName(t.driver_id) }))
-      .sort((a, b) => a.km - b.km)
-      .slice(0, 5);
+    const near: Candidate[] =
+      pk && hasLatLng(pk)
+        ? located
+            .map((t) => ({ truck: t, km: haversineKm(pk, { lat: t.lat!, lng: t.lng! }), seenAgo: null, driver: p.driverName(t.driver_id) }))
+            .sort((a, b) => a.km - b.km)
+        : located.map((t) => ({ truck: t, km: null, seenAgo: null, driver: p.driverName(t.driver_id) }));
+    const rest: Candidate[] = unlocated.map((t) => ({
+      truck: t,
+      km: null,
+      seenAgo: t.last_seen_at ? formatDuration(minutesSince(t.last_seen_at, now)) : null,
+      driver: p.driverName(t.driver_id),
+    }));
+    // Trucks with a driver first: one without can't be assigned until it has one.
+    const all = [...near, ...rest];
+    return [...all.filter((c) => c.truck.driver_id), ...all.filter((c) => !c.truck.driver_id)].slice(0, MAX_CANDIDATES);
   }
 
   // Bring the selected row into view when it was picked from elsewhere (map, header, answer card).
@@ -188,6 +219,8 @@ export function DeliveryList(p: Props) {
               d={d}
               detail={detail}
               line2={line2(d)}
+              due={dueLine(d, config.timezone, config.locale, now)}
+              dueState={dueState(d, now)}
               flag={p.attentionIds.has(d.id) ? 'Needs attention' : null}
               selected={p.sel === d.id}
               expanded={ex}
@@ -195,7 +228,7 @@ export function DeliveryList(p: Props) {
               now={now}
               onSelect={() => p.onSelect(d.id)}
               onToggle={() => p.onToggle(d.id)}
-              candidates={ex && d.status === 'pending' ? candidates(detail) : []}
+              candidates={ex && (d.status === 'pending' || d.status === 'failed') ? candidates(detail) : []}
               availableCount={available.length}
               hover={p.hover}
               assigning={p.assigningId === d.id}
@@ -203,7 +236,14 @@ export function DeliveryList(p: Props) {
               onAssign={(truckId) => p.onAssign(d.id, truckId)}
               note={p.notes[d.id] ?? null}
               error={err}
-              onRetry={() => err && p.onAssign(d.id, err.truckId)}
+              onRetry={() => err && (err.mode ? p.onReopen(d.id, err.truckId, err.mode) : p.onAssign(d.id, err.truckId))}
+              onReopen={(truckId, mode) => p.onReopen(d.id, truckId, mode)}
+              oldTruck={d.status === 'failed' && d.truck_id ? (T.get(d.truck_id) ?? null) : null}
+              oldDriver={d.status === 'failed' && d.truck_id ? p.driverName(T.get(d.truck_id)?.driver_id ?? null) : null}
+              onCancel={() => p.onCancel(d.id)}
+              cancelling={p.cancellingId === d.id}
+              cancelError={p.cancelErrors[d.id] ?? null}
+              noDriver={(d.status === 'assigned' || d.status === 'in_transit') && !!d.truck_id && !T.get(d.truck_id)?.driver_id}
             />
           );
         })}
@@ -229,6 +269,12 @@ export function DeliveryList(p: Props) {
                 New delivery
               </button>
             )}
+          </li>
+        )}
+        {deliveries.length > 0 && (
+          <li className="t-body-sm px-4 py-3 text-ink-muted">
+            Completed and cancelled deliveries leave this list {config.board_hours === 1 ? 'an hour' : `${config.board_hours} hours`} after they finish.{' '}
+            <Link href="/console/history">See all in History</Link>
           </li>
         )}
         {deliveries.length > 0 && list.length === 0 && (

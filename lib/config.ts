@@ -4,18 +4,13 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from './api';
 import { THRESHOLDS, type Config } from './types';
 
-// GET /config serves units, timezone, language, the map centre and the service-area bounding box.
-// The backend reads it from its environment at startup and has no write path.
-//
-// Everything else the screens need is client-side until the API serves it. TODO(config):
-// operator name and phones, the agent switch and the depot come from NEXT_PUBLIC_* env vars;
-// the exception thresholds are THRESHOLDS in lib/types.ts (TODO(config-thresholds)).
+// GET /config serves every operator setting: region, map and service area, organisation, the
+// agent switch and the alert thresholds. Dispatchers change them on the Settings page (PUT
+// /config); they're stored in the database and take effect without a restart.
 
-const env = (v: string | undefined, fallback: string) => (v && v.trim() ? v.trim() : fallback);
-const num = (v: string | undefined) => (v && Number.isFinite(Number(v)) ? Number(v) : null);
-
-/** Until GET /config answers: the backend's own defaults (UTC, metric, "en", whole world). */
+/** Until GET /config answers (or for an older API that serves fewer fields). */
 export const SERVER_DEFAULTS: Config = {
+  country: '',
   units: 'metric',
   timezone: 'UTC',
   language: 'en',
@@ -26,34 +21,24 @@ export const SERVER_DEFAULTS: Config = {
   max_lat: 90,
   min_lng: -180,
   max_lng: 180,
+  operator_name: 'Dispatch',
+  support_phone: '',
+  dispatch_phone: '',
+  depot: null,
+  agent_enabled: true,
+  ...THRESHOLDS,
+  eta_speed_kph: 25,
+  stop_minutes: 10,
+  board_hours: 12,
+  pod_photo_required: false,
+  pod_signature_required: true,
+  customer_terms: '',
+  customer_faq: [],
+  updated_at: null,
 };
 
-const depotLat = num(process.env.NEXT_PUBLIC_DEPOT_LAT);
-const depotLng = num(process.env.NEXT_PUBLIC_DEPOT_LNG);
-
-export const CLIENT_CONFIG = {
-  operator_name: env(process.env.NEXT_PUBLIC_OPERATOR_NAME, 'Dispatch'),
-  support_phone: env(process.env.NEXT_PUBLIC_SUPPORT_PHONE, ''),
-  dispatch_phone: env(process.env.NEXT_PUBLIC_DISPATCH_PHONE, ''),
-  agent_enabled: process.env.NEXT_PUBLIC_AGENT_ENABLED !== 'false',
-  /** Pre-fills the pickup of a new delivery. Config has no depot field. */
-  depot:
-    process.env.NEXT_PUBLIC_DEPOT_ADDRESS && depotLat != null && depotLng != null
-      ? { address: process.env.NEXT_PUBLIC_DEPOT_ADDRESS, lat: depotLat, lng: depotLng }
-      : null,
-};
-
-/** Server config, client-side settings and thresholds, plus two conveniences. */
+/** Config plus three conveniences. */
 export interface AppConfig extends Config {
-  operator_name: string;
-  support_phone: string;
-  dispatch_phone: string;
-  agent_enabled: boolean;
-  depot: { address: string; lat: number; lng: number } | null;
-  stale_minutes: number;
-  pending_minutes: number;
-  failed_window_minutes: number;
-  ping_seconds: number;
   /** = language, for Intl. */
   locale: string;
   center: { lat: number; lng: number };
@@ -61,25 +46,27 @@ export interface AppConfig extends Config {
   hasServiceArea: boolean;
 }
 
-export function toAppConfig(c: Config): AppConfig {
+export const isWholeWorld = (c: Pick<Config, 'min_lat' | 'max_lat' | 'min_lng' | 'max_lng'>) =>
+  c.min_lat <= -90 && c.max_lat >= 90 && c.min_lng <= -180 && c.max_lng >= 180;
+
+export function toAppConfig(raw: Partial<Config>): AppConfig {
+  const c: Config = { ...SERVER_DEFAULTS, ...raw };
   return {
     ...c,
-    ...CLIENT_CONFIG,
-    ...THRESHOLDS,
     locale: c.language || 'en',
     center: { lat: c.center_lat, lng: c.center_lng },
-    hasServiceArea: !(c.min_lat <= -90 && c.max_lat >= 90 && c.min_lng <= -180 && c.max_lng >= 180),
+    hasServiceArea: !isWholeWorld(c),
   };
 }
 
 export const CONFIG_KEY = ['config'] as const;
 
-/** Fetched once and kept: the backend only reads it at startup. */
+/** Refetched every few minutes and on focus, so a save in another tab shows up here too. */
 export function useConfig(): AppConfig {
   const { data } = useQuery({
     queryKey: CONFIG_KEY,
-    queryFn: async () => toAppConfig({ ...SERVER_DEFAULTS, ...(await api<Partial<Config>>('/config')) }),
-    staleTime: Infinity,
+    queryFn: async () => toAppConfig(await api<Partial<Config>>('/config')),
+    staleTime: 5 * 60_000,
     retry: 1,
   });
   return data ?? DEFAULT_APP_CONFIG;
@@ -88,7 +75,7 @@ export function useConfig(): AppConfig {
 export const DEFAULT_APP_CONFIG = toAppConfig(SERVER_DEFAULTS);
 
 /** Inside the service-area bounding box: the backend rejects stops and pings outside it. */
-export const inServiceArea = (c: Config, p: { lat: number; lng: number }) =>
+export const inServiceArea = (c: Pick<Config, 'min_lat' | 'max_lat' | 'min_lng' | 'max_lng'>, p: { lat: number; lng: number }) =>
   p.lat >= c.min_lat && p.lat <= c.max_lat && p.lng >= c.min_lng && p.lng <= c.max_lng;
 
 export const isRtlLocale = (locale: string) => /^(ar|he|fa|ur)\b/i.test(locale);

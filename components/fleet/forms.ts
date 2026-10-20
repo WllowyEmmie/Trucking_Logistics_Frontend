@@ -6,6 +6,36 @@ export const normPlate = (s: string) => s.replace(/[\s\-.]/g, '').toUpperCase();
 /** Phone digits with a leading +, for duplicate checks and validation. */
 export const normPhone = (s: string) => s.replace(/[^\d+]/g, '');
 
+/**
+ * POST /drivers body from the form, or the field errors. The phone is sent normalised: the API's
+ * duplicate check is an exact match, so "+44 7700 900123" and "+447700900123" would otherwise both
+ * be accepted as different drivers.
+ */
+export function driverRequest(
+  name: string,
+  phone: string,
+  pin = '',
+):
+  | { ok: true; body: { name: string; phone: string; pin?: string } }
+  | { ok: false; errs: { name?: string; phone?: string; pin?: string } } {
+  const errs: { name?: string; phone?: string; pin?: string } = {};
+  const ph = normPhone(phone);
+  if (!name.trim()) errs.name = "Enter the driver's name";
+  if (!ph) errs.phone = 'Enter a mobile number';
+  else if (!/^\+\d{7,15}$/.test(ph)) errs.phone = 'Start with + and the country code, then the number';
+  const pinErr = pinProblem(pin);
+  if (pin && pinErr) errs.pin = pinErr;
+  if (Object.keys(errs).length) return { ok: false, errs };
+  return { ok: true, body: { name: name.trim(), phone: ph, ...(pin ? { pin } : {}) } };
+}
+
+/** Why a PIN would be refused, or null. The API takes 4 to 8 digits; 6 is much harder to guess. */
+export function pinProblem(pin: string): string | null {
+  if (!/^\d+$/.test(pin)) return 'Digits only';
+  if (pin.length < 4 || pin.length > 8) return '4 to 8 digits';
+  return null;
+}
+
 export const fieldCls = (err?: boolean, mono?: boolean) =>
   `min-h-11 rounded-md bg-surface-100 px-3 text-[15px] text-ink ${mono ? 'font-mono' : ''} ${
     err ? 'border-2 border-attention' : 'border border-border'

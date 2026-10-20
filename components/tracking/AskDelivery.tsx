@@ -16,6 +16,8 @@ interface Props {
   operator: string;
   phone: string | null;
   desktop?: boolean;
+  /** Questions from the operator's help list, to tap instead of typing. */
+  suggestions?: string[];
 }
 
 /** What the customer sees when there's no answer. Never the agent's internals. */
@@ -32,7 +34,7 @@ function failure(e: ApiError, operator: string, phone: string | null): string {
  * The customer's question box on the tracking page: POST /track/{token}/ask. The agent answers
  * from this delivery's tracking data only. One answer at a time, no history, plain text.
  */
-export function AskDelivery({ token, operator, phone, desktop }: Props) {
+export function AskDelivery({ token, operator, phone, desktop, suggestions = [] }: Props) {
   const [q, setQ] = useState('');
   const [state, setState] = useState<State>({ kind: 'idle' });
   const inflight = useRef<AbortController | null>(null);
@@ -82,6 +84,23 @@ export function AskDelivery({ token, operator, phone, desktop }: Props) {
           Ask
         </button>
       </form>
+
+      {suggestions.length > 0 && (
+        <ul aria-label="Common questions" className="m-0 flex list-none flex-wrap gap-1.5 p-0">
+          {suggestions.map((s) => (
+            <li key={s}>
+              <button
+                type="button"
+                disabled={state.kind === 'thinking'}
+                onClick={() => void run(s)}
+                className="min-h-9 rounded-full border border-border bg-surface-100 px-3 text-start text-[13px] text-ink hover:bg-surface-200 disabled:opacity-45"
+              >
+                {s}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {state.kind !== 'idle' && (
         <div

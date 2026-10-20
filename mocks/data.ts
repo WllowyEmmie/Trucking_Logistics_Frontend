@@ -20,6 +20,10 @@ import type {
   TrackResponse,
   Truck,
   TruckStatus,
+  DeliveryEta,
+  FailReason,
+  HistoryItem,
+  HistoryPage,
 } from '@/lib/types';
 import { THRESHOLDS } from '@/lib/types';
 
@@ -128,6 +132,7 @@ interface MDelivery {
   truck_id: string | null;
   created_at: string;
   updated_at: string;
+  due_by?: string | null;
 }
 
 interface MStop extends Stop {
@@ -182,6 +187,22 @@ function seed(): Db {
     max_lat: 54.1,
     min_lng: -2.3,
     max_lng: -1.0,
+    country: 'GB',
+    operator_name: 'Dispatch',
+    support_phone: '',
+    dispatch_phone: '',
+    depot: null,
+    agent_enabled: true,
+    ...THRESHOLDS,
+    eta_speed_kph: 25,
+    stop_minutes: 10,
+    board_hours: 12,
+    pod_photo_required: false,
+    pod_signature_required: true,
+    customer_terms: MOCK_TERMS,
+    customer_faq: MOCK_FAQ,
+    updated_at: null,
+    ...savedSettings(),
   };
   const pingMs = THRESHOLDS.ping_seconds * 1000;
   const db: Db = { config, trucks: [], drivers: [], deliveries: [], stops: [], events: [], proposals: [], refSeq: 10001, eventSeq: 1, uuid, tokenRng: rng(99) };
@@ -382,6 +403,27 @@ function newToken(db: Db): string {
 }
 
 let db: Db | null = null;
+
+const MOCK_TERMS = `Checking your goods
+Please check the goods when they arrive, before you sign. If anything is damaged, tell the driver and note it when you sign.
+
+Damage or missing items
+Report it to {company} on {support_phone} within 24 hours of delivery, with your delivery reference and photos.`;
+const MOCK_FAQ = [
+  { q: 'When will my delivery arrive?', a: 'Once the truck is on its way, this page shows an estimated arrival time. It can change with traffic.' },
+  { q: 'Do I have to sign?', a: 'Yes. The receiver signs on the driver\u2019s phone. Check the goods before you sign.' },
+];
+
+// Settings saved on the mock's Settings page outlive a reload, like the API's settings row.
+const SETTINGS_KEY = 'mock.settings';
+function savedSettings(): Partial<Config> {
+  try {
+    const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(SETTINGS_KEY);
+    return raw ? (JSON.parse(raw) as Partial<Config>) : {};
+  } catch {
+    return {};
+  }
+}
 const getDb = () => (db ??= seed());
 
 // ---- Simulation: trucks on delivery drive to their next stop and report on the ping interval ----
@@ -452,7 +494,49 @@ const listItem = (d: MDelivery): DeliveryListItem => ({
   customer_name: d.customer_name,
   truck_id: d.truck_id,
   created_at: d.created_at,
+  due_by: d.due_by ?? null,
+  eta: etaFor(d)?.arrival ?? null,
+  finished_at: finishedAt(d),
 });
+
+const FINAL = new Set(['completed', 'cancelled', 'failed']);
+/** As the API: the latest completed/cancelled/failed event, for a finished delivery. */
+function finishedAt(d: MDelivery): string | null {
+  if (!FINAL.has(d.status)) return null;
+  const ts = getDb()
+    .events.filter((e) => e.delivery_id === d.id && FINAL.has(e.event_type))
+    .map((e) => Date.parse(e.created_at));
+  return ts.length ? iso(Math.max(...ts)) : d.updated_at;
+}
+
+/** The API's estimate (internal/eta): straight line x1.3 at the Settings speed, plus time at each stop. */
+function etaFor(d: MDelivery, now = Date.now()): DeliveryEta | null {
+  if (d.status !== 'assigned' && d.status !== 'in_transit') return null;
+  const db_ = getDb();
+  const t = d.truck_id ? db_.trucks.find((x) => x.id === d.truck_id) : undefined;
+  if (t?.lat == null || t.lng == null) return null;
+  const left = db_.stops
+    .filter((s) => s.delivery_id === d.id && (s.status === 'pending' || s.status === 'arrived') && s.lat != null && s.lng != null)
+    .sort((a, b) => a.sequence - b.sequence);
+  if (!left.length) return null;
+  const { eta_speed_kph: kph, stop_minutes } = db_.config;
+  const dwell = stop_minutes * MIN;
+  let tm = now;
+  let pos = { lat: t.lat, lng: t.lng };
+  const stops = left.map((s) => {
+    let at: number;
+    if (s.status === 'arrived') {
+      at = s.arrived_at ? Date.parse(s.arrived_at) : now;
+      tm = Math.max(now, at + dwell);
+    } else {
+      at = tm + ((haversineKm(pos, s as LatLng) * 1.3) / kph) * 3600_000;
+      tm = at + dwell;
+    }
+    pos = s as LatLng;
+    return { stop_id: s.id, at: iso(at) };
+  });
+  return { arrival: stops[stops.length - 1]!.at, stops };
+}
 const rowOut = (d: MDelivery) => ({ id: d.id, reference: d.reference, status: d.status, truck_id: d.truck_id });
 
 // ---- Lookups with the API's error messages ----
@@ -488,12 +572,45 @@ function proposalById(id: string): Proposal {
   return p;
 }
 
+const goodsOnTruck = (stops: MStop[]) =>
+  stops.some((s) => s.stop_type === 'pickup' && s.status === 'completed') && stops.some((s) => s.status === 'pending' || s.status === 'arrived');
+
 const VALID_STATUSES = new Set(['pending', 'assigned', 'in_transit', 'completed', 'cancelled', 'failed']);
 const VALID_REASONS = new Set(['breakdown', 'customer_unavailable', 'goods_damaged', 'accident', 'other']);
 
 export const mock = {
   health: () => ({ status: 'ok' }),
   config: () => getDb().config,
+
+  /** PUT /config: the API's Validate, the checks the page can't make itself. */
+  saveConfig(body: Partial<Config>) {
+    const d = getDb();
+    const next: Config = { ...d.config, ...body, depot: body.depot ?? null };
+    if (!next.operator_name?.trim()) throw new MockError(400, 'the company name must be 1 to 80 characters');
+    if (next.min_lat >= next.max_lat) throw new MockError(400, 'service area: the southern latitude must be less than the northern one');
+    if (next.min_lng >= next.max_lng) throw new MockError(400, 'service area: the western longitude must be less than the eastern one');
+    if (!inArea(next, next.center_lat, next.center_lng)) throw new MockError(400, 'the map centre must be inside the service area');
+    if (next.depot && !inArea(next, next.depot.lat, next.depot.lng)) throw new MockError(400, 'the depot must be inside the service area');
+    next.updated_at = new Date().toISOString();
+    next.updated_by = 'You (mock)';
+    d.config = next;
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+    } catch {
+      /* private mode: this session only */
+    }
+    return next;
+  },
+
+  /** POST /config/check: open stops and last-known truck positions outside a proposed area. */
+  checkArea(b: { min_lat: number; max_lat: number; min_lng: number; max_lng: number }) {
+    const d = getDb();
+    const box = { ...d.config, ...b };
+    const open = new Set(d.deliveries.filter((x) => ['pending', 'assigned', 'in_transit'].includes(x.status)).map((x) => x.id));
+    const stops = d.stops.filter((s) => open.has(s.delivery_id) && s.status !== 'completed' && s.status !== 'skipped' && s.lat != null && s.lng != null && !inArea(box, s.lat, s.lng)).length;
+    const trucks = d.trucks.filter((t) => t.lat != null && t.lng != null && !inArea(box, t.lat, t.lng)).length;
+    return { stops_outside: stops, trucks_outside: trucks };
+  },
 
   trucks(now = Date.now()) {
     advance(now);
@@ -562,11 +679,17 @@ export const mock = {
     return drv;
   },
 
-  deliveries(status: string | null, now = Date.now()) {
+  deliveries(status: string | null, board = false, now = Date.now()) {
     advance(now);
     if (status && !VALID_STATUSES.has(status)) throw new MockError(400, 'invalid delivery status');
+    const since = now - getDb().config.board_hours * 3600_000;
     return getDb()
       .deliveries.filter((d) => !status || d.status === status)
+      .filter((d) => {
+        if (!board || !FINAL.has(d.status) || d.status === 'failed') return true;
+        const f = finishedAt(d);
+        return f != null && Date.parse(f) >= since;
+      })
       .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
       .map(listItem);
   },
@@ -590,8 +713,10 @@ export const mock = {
       truck_lat: t?.lat ?? null,
       truck_seen_at: t?.last_seen_at ?? null,
       created_at: d.created_at,
+      due_by: d.due_by ?? null,
     };
     return {
+      eta: etaFor(d),
       delivery: detail,
       stops: db_.stops.filter((s) => s.delivery_id === d.id).sort((a, b) => a.sequence - b.sequence).map(stopOut),
       events: db_.events.filter((e) => e.delivery_id === d.id).map(eventOut),
@@ -625,7 +750,9 @@ export const mock = {
       truck_id: null,
       created_at: iso(now),
       updated_at: iso(now),
+      due_by: body.due_by ?? null,
     };
+    if (d.due_by && Date.parse(d.due_by) < now - 15 * MIN) throw new MockError(400, 'the due time has already passed');
     db_.deliveries.push(d);
     const created = stops.map((s, i) => {
       const st: MStop = {
@@ -663,6 +790,7 @@ export const mock = {
       t.status = 'on_delivery';
     }
     if (t.status !== 'available') throw new MockError(409, `truck ${t.plate_number} is ${t.status}`);
+    if (!t.driver_id) throw new MockError(409, `truck ${t.plate_number} has no driver; give it a driver in Fleet first`);
     const now = Date.now();
     d.status = 'assigned';
     d.truck_id = t.id;
@@ -673,6 +801,126 @@ export const mock = {
       t.sim = { from: { lat: t.lat, lng: t.lng }, to: pk as LatLng, t0: now, dur: legMs(t as LatLng, pk as LatLng), f0: 0, hold: true };
     addEv(db_, d.id, 'assigned', now, `assigned to ${t.plate_number}`);
     return rowOut(d);
+  },
+
+  /** POST /deliveries/{id}/reopen {mode, truck_id}: the API's rules (internal/api/reopen.go). */
+  reopen(id: string, mode: string | undefined, truckId: string | undefined) {
+    const db_ = getDb();
+    const d = deliveryById(id);
+    if (mode !== 'resume' && mode !== 'handover' && mode !== 'restart') throw new MockError(400, 'mode must be resume, handover or restart');
+    if (!truckId || !UUID_RE.test(truckId)) throw new MockError(400, 'choose a truck');
+    if (d.status !== 'failed') throw new MockError(409, `delivery is ${d.status}; only a failed delivery can be sent out again`);
+    const stops = db_.stops.filter((s) => s.delivery_id === d.id).sort((a, b) => a.sequence - b.sequence);
+    const old = d.truck_id ? truckById(d.truck_id) : null;
+    const plate = old?.plate_number ?? 'the truck';
+    const loaded = goodsOnTruck(stops);
+    const same = d.truck_id === truckId;
+    if (mode === 'resume' && loaded && !same) throw new MockError(409, `the goods are on ${plate}: send ${plate} again, or hand them over to another truck`);
+    if (mode === 'handover' && !loaded) throw new MockError(409, "nothing has been collected yet, so there's nothing to hand over: reassign it instead");
+    if (mode === 'handover' && same) throw new MockError(409, `a handover goes to a different truck than ${plate}`);
+    if (mode === 'handover' && (old?.lat == null || old?.lng == null)) throw new MockError(409, `${plate} has never reported a position, so there's no handover point: start over instead`);
+
+    const savedStops = db_.stops.map((s) => ({ ...s }));
+    const before = { status: d.status, truck_id: d.truck_id };
+    const evCount = db_.events.length;
+    if (mode === 'handover') {
+      const at = stops.find((s) => s.status === 'pending' || s.status === 'arrived')!.sequence;
+      for (const s of stops) if (s.sequence >= at) s.sequence += 1;
+      const drv = old!.driver_id ? db_.drivers.find((x) => x.id === old!.driver_id) : undefined;
+      db_.stops.push({
+        id: db_.uuid(), delivery_id: d.id, sequence: at, stop_type: 'pickup', address: `Handover from ${plate}`,
+        lat: old!.lat, lng: old!.lng, status: 'pending', arrived_at: null, completed_at: null,
+        contact_name: drv?.name ?? null, contact_phone: drv?.phone ?? null,
+      });
+    }
+    for (const s of db_.stops)
+      if (s.delivery_id === d.id && (mode === 'restart' || s.status === 'pending' || s.status === 'arrived'))
+        Object.assign(s, { status: 'pending', arrived_at: null, completed_at: null });
+    d.status = 'pending';
+    d.truck_id = null;
+    const note = mode === 'handover' ? `handover from ${plate}` : mode === 'restart' ? 'starting over from the pickup' : loaded ? 'trying again' : 'reassigned';
+    addEv(db_, d.id, 'reopened', Date.now(), `${note} · by You (mock)`);
+    try {
+      return this.assign(id, truckId);
+    } catch (e) {
+      // One transaction in the API: a refused truck leaves it failed.
+      Object.assign(d, before);
+      db_.stops = savedStops;
+      db_.events.length = evCount;
+      throw e;
+    }
+  },
+
+  /** GET /deliveries/history: finished deliveries, newest first, keyset-paged like the API. */
+  history(q: URLSearchParams): HistoryPage {
+    advance(Date.now());
+    const db_ = getDb();
+    const outcome = q.get('outcome') ?? '';
+    if (!['', 'completed', 'cancelled', 'failed', 'recovered', 'late'].includes(outcome))
+      throw new MockError(400, 'outcome must be completed, cancelled, failed, recovered or late');
+    const text = (q.get('q') ?? '').trim().toLowerCase();
+    const from = q.get('from') ? Date.parse(q.get('from')!) : null;
+    const to = q.get('to') ? Date.parse(q.get('to')!) : null;
+    const limit = Math.min(200, Math.max(1, Number(q.get('limit') ?? 50) || 50));
+    const before = q.get('before') ? JSON.parse(atob(q.get('before')!)) as { at: string; id: string } : null;
+    const rows: HistoryItem[] = db_.deliveries
+      .filter((d) => FINAL.has(d.status))
+      .map((d) => {
+        const ev = db_.events.filter((e) => e.delivery_id === d.id);
+        const fails = ev.filter((e) => e.event_type === 'failed');
+        const assigned = ev.filter((e) => e.event_type === 'assigned').pop();
+        const finished = finishedAt(d)!;
+        return {
+          id: d.id,
+          reference: d.reference,
+          customer_name: d.customer_name,
+          status: d.status as HistoryItem['status'],
+          created_at: d.created_at,
+          finished_at: finished,
+          due_by: d.due_by ?? null,
+          failures: fails.length,
+          reopens: ev.filter((e) => e.event_type === 'reopened').length,
+          first_fail_reason: (fails[0]?.note as FailReason | undefined) ?? null,
+          plate: assigned?.note?.replace(/^assigned to /, '') ?? null,
+          late: d.status === 'completed' && !!d.due_by && Date.parse(finished) > Date.parse(d.due_by),
+        };
+      })
+      .filter((h) => {
+        if (outcome === 'recovered') return h.status === 'completed' && h.failures > 0;
+        if (outcome === 'late') return h.late;
+        return !outcome || h.status === outcome;
+      })
+      .filter((h) => !text || h.reference.toLowerCase().includes(text) || h.customer_name.toLowerCase().includes(text))
+      .filter((h) => (from == null || Date.parse(h.finished_at) >= from) && (to == null || Date.parse(h.finished_at) < to))
+      .sort((a, b) => Date.parse(b.finished_at) - Date.parse(a.finished_at) || b.id.localeCompare(a.id))
+      .filter((h) => !before || Date.parse(h.finished_at) < Date.parse(before.at) || (h.finished_at === before.at && h.id < before.id));
+    const page = rows.slice(0, limit);
+    const last = page[page.length - 1];
+    return { items: page, next: rows.length > limit && last ? btoa(JSON.stringify({ at: last.finished_at, id: last.id })) : null };
+  },
+
+  /** POST …/stops/{stopId}/proof: kept as a summary (the mock serves no images). */
+  saveProof(id: string, stopId: string, b: { receiver_name?: string; photo?: string | null; signature?: string | null }) {
+    const db_ = getDb();
+    const d = deliveryById(id);
+    const s = db_.stops.find((x) => x.id === stopId && x.delivery_id === d.id);
+    if (!s) throw new MockError(404, 'stop not found on this delivery');
+    if (!b.receiver_name?.trim()) throw new MockError(400, 'enter who received it (up to 100 characters)');
+    if (s.stop_type !== 'dropoff') throw new MockError(409, 'proof of delivery is for drop-offs');
+    s.proof = { receiver_name: b.receiver_name.trim(), captured_at: iso(Date.now()), has_photo: !!b.photo, has_signature: !!b.signature, lat: null, lng: null, saved_by: 'You (mock)' };
+    addEv(db_, d.id, 'proof', Date.now(), `received by ${s.proof.receiver_name}`, s.id);
+    return s.proof;
+  },
+
+  /** POST /deliveries/{id}/due {due_by | null} */
+  setDue(id: string, due: string | null | undefined) {
+    const db_ = getDb();
+    const d = deliveryById(id);
+    if (due && Date.parse(due) < Date.now() - 15 * MIN) throw new MockError(400, 'the due time has already passed');
+    if (d.status === 'completed' || d.status === 'cancelled') throw new MockError(409, `delivery is ${d.status}; its due time can't change`);
+    d.due_by = due ?? null;
+    addEv(db_, d.id, 'due_changed', Date.now(), due ?? '');
+    return { id: d.id, due_by: d.due_by };
   },
 
   start(id: string) {
@@ -688,6 +936,9 @@ export const mock = {
     const db_ = getDb();
     const d = deliveryById(id);
     if (d.status !== 'in_transit') throw new MockError(409, `delivery is ${d.status} and cannot be updated to completed`);
+    // As the API: every stop must be done first.
+    if (db_.stops.some((s) => s.delivery_id === d.id && s.status !== 'completed' && s.status !== 'skipped'))
+      throw new MockError(409, 'delivery still has open stops; complete every stop first');
     releaseTruck(d);
     d.status = 'completed';
     addEv(db_, d.id, 'completed', Date.now());
@@ -713,8 +964,9 @@ export const mock = {
   cancel(id: string) {
     const db_ = getDb();
     const d = deliveryById(id);
-    if (d.status !== 'pending' && d.status !== 'assigned') throw new MockError(409, `delivery is ${d.status} and cannot be cancelled`);
-    if (d.truck_id) releaseTruck(d);
+    if (!['pending', 'assigned', 'in_transit', 'failed'].includes(d.status)) throw new MockError(409, `delivery is ${d.status} and cannot be cancelled`);
+    // A failed delivery already let its truck go.
+    if (d.truck_id && d.status !== 'failed') releaseTruck(d);
     d.status = 'cancelled';
     d.truck_id = null;
     addEv(db_, d.id, 'cancelled', Date.now());
@@ -752,7 +1004,9 @@ export const mock = {
     if (body.kind === 'flag' && hasAction) throw new MockError(400, 'a flag has nothing to execute and must not carry an action');
     const act = body.action as Proposal['action'];
     if (act) {
-      if (act.type !== 'assign') throw new MockError(400, 'action type must be assign');
+      if (act.type !== 'assign' && act.type !== 'reopen') throw new MockError(400, 'action type must be assign or reopen');
+      if (act.type === 'reopen' && !['resume', 'handover', 'restart'].includes(act.mode))
+        throw new MockError(400, 'a reopen action needs mode resume, handover or restart');
       if (!UUID_RE.test(act.delivery_id ?? '')) throw new MockError(400, 'action.delivery_id must be a uuid');
       if (!UUID_RE.test(act.truck_id ?? '')) throw new MockError(400, 'action.truck_id must be a uuid');
     }
@@ -783,7 +1037,8 @@ export const mock = {
     const p = proposalById(id);
     if (p.kind !== 'change' || !p.action) throw new MockError(409, 'a flag has nothing to approve');
     try {
-      mock.assign(p.action.delivery_id, p.action.truck_id);
+      if (p.action.type === 'reopen') mock.reopen(p.action.delivery_id, p.action.mode, p.action.truck_id);
+      else mock.assign(p.action.delivery_id, p.action.truck_id);
     } catch (e) {
       if (e instanceof MockError && e.status === 409) Object.assign(p, { status: 'expired', decided_at: iso(Date.now()), decided_by: `system: ${e.message}` });
       throw e;
@@ -848,6 +1103,8 @@ export const mock = {
     const d = db_.deliveries.find((x) => x.tracking_token === token);
     if (!d) throw new MockError(404, 'delivery not found');
     const t = d.truck_id ? db_.trucks.find((x) => x.id === d.truck_id) : undefined;
+    // As the API: the truck's position only while it's working on this delivery.
+    const live = d.status === 'assigned' || d.status === 'in_transit';
     return {
       reference: d.reference,
       status: d.status,
@@ -855,9 +1112,11 @@ export const mock = {
       customer_name: d.customer_name,
       goods_desc: d.goods_desc,
       created_at: d.created_at,
-      truck_lng: t?.lng ?? null,
-      truck_lat: t?.lat ?? null,
-      truck_seen_at: t?.last_seen_at ?? null,
+      truck_lng: live ? (t?.lng ?? null) : null,
+      truck_lat: live ? (t?.lat ?? null) : null,
+      truck_seen_at: live ? (t?.last_seen_at ?? null) : null,
+      due_by: d.due_by ?? null,
+      eta: etaFor(d)?.arrival ?? null,
       stops: db_.stops
         .filter((s) => s.delivery_id === d.id)
         .sort((a, b) => a.sequence - b.sequence)

@@ -3,6 +3,8 @@
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useEffect, useSyncExternalStore } from 'react';
 import { API_URL, api } from './api';
+import { CONFIG_KEY } from './config';
+import { DELIVERIES_KEY, DRIVERS_KEY, detailKey } from './deliveries';
 import type { Truck, TruckStatus } from './types';
 
 export const TRUCKS_KEY = ['trucks'] as const;
@@ -28,7 +30,33 @@ interface WsTruck {
   /** Set on snapshot only (omitempty): ingestLocations doesn't look the status up. */
   status?: TruckStatus;
 }
-export type WsMessage = { type: 'snapshot'; trucks: WsTruck[] } | { type: 'position'; truck: WsTruck };
+export type WsMessage =
+  | { type: 'snapshot'; trucks: WsTruck[] }
+  | { type: 'position'; truck: WsTruck }
+  /** Something changed (internal/api/live.go): refetch these. No data rides along. */
+  | { type: 'changed'; topics: string[]; delivery_id?: string };
+
+/** Query keys per `changed` topic. */
+const TOPIC_KEYS: Record<string, readonly (readonly string[])[]> = {
+  deliveries: [DELIVERIES_KEY, ['history']],
+  trucks: [TRUCKS_KEY],
+  drivers: [DRIVERS_KEY],
+  proposals: [['proposals']],
+  config: [CONFIG_KEY],
+};
+
+/** Several changes in a burst (assign = delivery + truck + proposal) become one refetch per key. */
+const dueKeys = new Map<string, readonly string[]>();
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+function invalidateSoon(qc: QueryClient, key: readonly string[]) {
+  dueKeys.set(JSON.stringify(key), key);
+  if (flushTimer) return;
+  flushTimer = setTimeout(() => {
+    flushTimer = null;
+    for (const k of dueKeys.values()) void qc.invalidateQueries({ queryKey: k });
+    dueKeys.clear();
+  }, 250);
+}
 
 type Fix = Pick<Truck, 'lat' | 'lng' | 'last_seen_at'>;
 
@@ -96,6 +124,9 @@ function onMessage(qc: QueryClient, raw: unknown) {
   } else if (m.type === 'position') {
     remember(m.truck);
     qc.setQueryData<Truck[]>(TRUCKS_KEY, (ts) => ts?.map((t) => (t.id === m.truck.id ? withFix(t) : t)));
+  } else if (m.type === 'changed') {
+    for (const topic of m.topics ?? []) for (const key of TOPIC_KEYS[topic] ?? []) invalidateSoon(qc, key);
+    if (m.delivery_id) invalidateSoon(qc, detailKey(m.delivery_id));
   }
 }
 

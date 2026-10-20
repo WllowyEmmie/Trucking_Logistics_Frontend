@@ -1,6 +1,7 @@
+import { X } from 'lucide-react';
 import type { ExceptionRow } from '@/lib/exceptions';
 
-const COLS = '150px 210px minmax(0,1fr) 52px 76px 88px';
+const COLS = '150px 210px minmax(0,1fr) 52px 76px 140px';
 /** Four rows show; more scroll inside the table instead of pushing the panes below out of view. */
 const ROWS_MAX = 'max-h-[196px] overflow-y-auto';
 
@@ -16,7 +17,29 @@ function AgentMark({ compact }: { compact?: boolean }) {
 const actionBtn =
   'rounded-md border border-border bg-surface-100 px-3 text-[13px] font-semibold text-ink';
 
-export function ExceptionTable({ rows, stacked, onView }: { rows: ExceptionRow[]; stacked: boolean; onView: (x: ExceptionRow) => void }) {
+/** "I've seen this": takes the row out of Needs attention. */
+function Dismiss({ x, onDismiss }: { x: ExceptionRow; onDismiss: (x: ExceptionRow) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onDismiss(x)}
+      aria-label={`Dismiss ${x.issue}: ${x.subject}`}
+      title={x.agent ? 'Dismiss for everyone (rejects the flag)' : 'Dismiss: seen it'}
+      className="flex h-11 w-11 flex-none items-center justify-center rounded-md border border-transparent bg-transparent text-ink-muted hover:border-border hover:bg-surface-100 hover:text-ink"
+    >
+      <X size={18} strokeWidth={2.5} aria-hidden="true" />
+    </button>
+  );
+}
+
+interface Props {
+  rows: ExceptionRow[];
+  stacked: boolean;
+  onView: (x: ExceptionRow) => void;
+  onDismiss: (x: ExceptionRow) => void;
+}
+
+export function ExceptionTable({ rows, stacked, onView, onDismiss }: Props) {
   if (rows.length === 0) {
     return (
       <div className="t-body flex min-h-11 items-center rounded-md border border-dashed border-border px-3 text-ink-muted">
@@ -36,9 +59,12 @@ export function ExceptionTable({ rows, stacked, onView }: { rows: ExceptionRow[]
             <span className="t-body-sm basis-full">
               {x.detail} · since {x.since}
             </span>
-            <button type="button" onClick={() => onView(x)} className={`${actionBtn} min-h-11`}>
-              {x.action}
-            </button>
+            <span className="ms-auto flex items-center gap-1">
+              <button type="button" onClick={() => onView(x)} className={`${actionBtn} min-h-11`}>
+                {x.action}
+              </button>
+              <Dismiss x={x} onDismiss={onDismiss} />
+            </span>
           </li>
         ))}
       </ul>
@@ -78,7 +104,7 @@ export function ExceptionTable({ rows, stacked, onView }: { rows: ExceptionRow[]
               {x.since}
             </span>
             <span role="cell">{x.agent ? <AgentMark /> : <span className="t-body-sm text-ink-muted">Rule</span>}</span>
-            <span role="cell" className="flex justify-end">
+            <span role="cell" className="flex items-center justify-end gap-1">
               <button
                 type="button"
                 onClick={() => onView(x)}
@@ -87,10 +113,29 @@ export function ExceptionTable({ rows, stacked, onView }: { rows: ExceptionRow[]
               >
                 {x.action}
               </button>
+              <Dismiss x={x} onDismiss={onDismiss} />
             </span>
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+/** What was dismissed, muted, each with Restore. Shown on request under the table. */
+export function DismissedList({ rows, onRestore }: { rows: ExceptionRow[]; onRestore: (x: ExceptionRow) => void }) {
+  return (
+    <ul aria-label="Dismissed" className="m-0 flex max-h-[148px] list-none flex-col gap-0.5 overflow-y-auto p-0">
+      {rows.map((x) => (
+        <li key={x.key} className="flex min-h-11 flex-wrap items-center gap-x-3 rounded-sm bg-surface-200 ps-2.5 pe-1 text-ink-muted">
+          <span className="t-body-sm font-semibold">{x.issue}</span>
+          <span className="t-mono">{x.subject}</span>
+          <span className="t-body-sm min-w-0 flex-1 truncate">{x.detail}</span>
+          <button type="button" onClick={() => onRestore(x)} aria-label={`Restore ${x.issue}: ${x.subject}`} className={`${actionBtn} min-h-11`}>
+            Restore
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }

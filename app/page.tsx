@@ -2,9 +2,16 @@
 
 import Link from 'next/link';
 import { StatusPill } from '@/components/StatusPill';
+import { useConfig } from '@/lib/config';
 import { useDeliveries, useDeliveryDetails } from '@/lib/deliveries';
 
 // Development index: where each surface lives. Not part of any product surface.
+
+/**
+ * The tracking-link list shows every recent customer's name and private link to whoever opens "/".
+ * Fine on a laptop; not on a deployed site with no login. Off in production builds unless asked for.
+ */
+const SHOW_LINKS = process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_SHOW_DEV_INDEX === 'true';
 
 /** How many tracking links to list: the most recent deliveries. */
 const RECENT = 20;
@@ -56,10 +63,11 @@ function TrackingLinks() {
 }
 
 export default function Home() {
+  const config = useConfig();
   return (
     <main className="mx-auto flex max-w-[720px] flex-col gap-8 px-4 py-12">
       <div className="flex flex-col gap-2">
-        <span className="t-label text-ink-muted">Kestrel Freight</span>
+        <span className="t-label text-ink-muted">{config.operator_name}</span>
         <h1 className="t-display m-0">Dispatch</h1>
       </div>
       <section className="flex flex-col gap-3">
@@ -72,13 +80,15 @@ export default function Home() {
       </section>
       <section className="flex flex-col gap-3">
         <h2 className="t-h2 m-0">Driver</h2>
-        <Link href="/driver" className="t-body font-semibold">Driver app (truck {process.env.NEXT_PUBLIC_DEMO_TRUCK_ID ?? 'KF-12'})</Link>
+        <Link href="/driver" className="t-body font-semibold">Driver app (sign in with a driver's phone number and PIN)</Link>
       </section>
-      <section className="flex flex-col gap-3">
-        <h2 className="t-h2 m-0">Customer tracking links</h2>
-        <p className="t-body-sm m-0 text-ink-muted">The {RECENT} most recent deliveries, newest first.</p>
-        <TrackingLinks />
-      </section>
+      {SHOW_LINKS && (
+        <section className="flex flex-col gap-3">
+          <h2 className="t-h2 m-0">Customer tracking links</h2>
+          <p className="t-body-sm m-0 text-ink-muted">The {RECENT} most recent deliveries, newest first.</p>
+          <TrackingLinks />
+        </section>
+      )}
     </main>
   );
 }

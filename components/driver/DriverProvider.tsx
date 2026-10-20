@@ -1,22 +1,25 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { inServiceArea, useConfig, type AppConfig } from '@/lib/config';
-import { DELIVERIES_KEY, detailKey, useDeliveries, useDeliveryDetail, useDrivers } from '@/lib/deliveries';
+import { DELIVERIES_KEY, detailKey, useDeliveries, useDeliveryDetail } from '@/lib/deliveries';
 import { formatTime } from '@/lib/format';
 import { FAIL_REASONS } from '@/lib/labels';
 import { offlineQueue, type DroppedItem, type QueueItem, type QueueSnapshot } from '@/lib/offlineQueue';
-import { usePositions } from '@/lib/positions';
+import { useSignedInAs } from '@/components/auth/Gate';
+import { ME_KEY } from '@/lib/auth';
+import { api } from '@/lib/api';
+import { TRUCKS_KEY } from '@/lib/positions';
 import type { DeliveryDetailResponse, DeliveryListItem, DeliveryStatus, FailReason, LocationPing, StopKind, StopStatus, Truck } from '@/lib/types';
 
-// Demo session: a constant, not a login flow. A plate number or the truck's uuid.
-export const DEMO_TRUCK = process.env.NEXT_PUBLIC_DEMO_TRUCK_ID ?? 'KF-12';
 /** A gap in location longer than this gets the paused notice. */
 const GAP_MS = 2 * 60_000;
-const CACHE_KEY = 'driver-cache';
+/** Cleared on sign-out (see signOutDriver), so the next driver on this phone starts clean. */
+export const CACHE_KEY = 'driver-cache';
 
-export type GpsState = 'starting' | 'live' | 'denied' | 'unsupported';
+/** `off`: off shift, so the phone isn't tracking at all. */
+export type GpsState = 'off' | 'starting' | 'live' | 'denied' | 'unsupported';
 
 /** A stop with the driver's queued (not yet confirmed) arrive/complete merged in. */
 export interface DriverStop {
@@ -44,9 +47,18 @@ interface Progress {
   done: Record<number, string>;
   /** Quick messages sent, per stop: message index → time. */
   msgs: Record<number, Record<number, string>>;
-  /** TODO(pod-api): proof of delivery isn't sent; kept for the summary only. */
+  /** Who signed at each drop-off (stop number → name), for the summary. Sent as proof (POST …/proof). */
+  received?: Record<number, string>;
+  /** Older builds kept one name for the last stop. */
   podName?: string;
   failReason?: FailReason;
+}
+
+/** What the driver collects at a drop-off. Images are data URLs, already shrunk. */
+export interface ProofInput {
+  receiverName: string;
+  signature: string | null;
+  photo: string | null;
 }
 const EMPTY_PROGRESS: Progress = { arrived: {}, done: {}, msgs: {} };
 
@@ -72,7 +84,12 @@ interface DriverCtx {
   start: () => void;
   arrive: (seq: number) => void;
   completeStop: (seq: number) => void;
-  completeDelivery: (podName: string) => void;
+  completeDelivery: () => void;
+  /** Proof of delivery for a drop-off; queued before the stop's completion. */
+  submitProof: (seq: number, proof: ProofInput) => void;
+  /** On shift: GPS runs and is recorded only then. */
+  onShift: boolean;
+  setShift: (on: boolean) => void;
   fail: (reason: FailReason) => void;
   markMessage: (seq: number, i: number) => void;
   gps: { state: GpsState; lastFixAt: number | null; pos: { lat: number; lng: number } | null };
@@ -141,17 +158,23 @@ export function DriverProvider({ children }: { children: ReactNode }) {
   // The last good answers, so the app opens with no signal.
   const [cache] = useState<Cache | null>(() => readJson<Cache>(CACHE_KEY));
 
-  // ---- Which truck is this phone? The demo id may be a plate or a uuid. ----
-  const trucksQ = usePositions();
-  const want = DEMO_TRUCK.trim().toLowerCase();
-  const truck = trucksQ.data?.find((t) => t.id.toLowerCase() === want || t.plate_number.toLowerCase() === want) ?? cache?.truck ?? undefined;
+  // ---- Which truck is this phone? The one the signed-in driver drives (GET /auth/me). ----
+  // The API only shows a driver their own truck. No socket here: that's the fleet feed, for
+  // dispatchers; this phone only needs its own truck, which a poll covers.
+  const me = useSignedInAs();
+  // On shift: the server's answer (GET /auth/me), overridden by what this phone just did until the
+  // queue has sent it. A delivery on the road means on shift whatever the cache says.
+  const [shiftOverride, setShiftOverride] = useState<boolean | null>(null);
+  const trucksQ = useQuery({ queryKey: TRUCKS_KEY, queryFn: () => api<Truck[]>('/trucks'), refetchInterval: 60_000 });
+  const truck =
+    trucksQ.data?.find((t) => t.id === me.truck_id) ?? (cache?.truck && cache.truck.id === me.truck_id ? cache.truck : undefined);
   const truckId = truck?.id ?? null;
-  const driverName = useDrivers().data?.find((d) => d.id === truck?.driver_id)?.name ?? null;
+  const driverName = me.name || null;
 
   // ---- Deliveries: the list has no truck filter, so it's filtered here. ----
-  const listQ = useDeliveries();
+  const listQ = useDeliveries(15_000);
   const mine = useMemo(
-    () => (listQ.data ? listQ.data.filter((d) => d.truck_id === truckId) : (cache?.deliveries ?? [])),
+    () => (listQ.data ?? cache?.deliveries ?? []).filter((d) => d.truck_id === truckId),
     [listQ.data, truckId, cache],
   );
 
@@ -185,6 +208,12 @@ export function DriverProvider({ children }: { children: ReactNode }) {
       if (rolledBack.current.has(d)) continue;
       rolledBack.current.add(d);
       const { kind, deliveryId, stopSeq, stopAction, path: p } = d.item;
+      if (kind === 'shift' || (kind === 'locations' && /off shift/i.test(d.message))) {
+        // Refused (ending mid-delivery), or dispatch ended the shift: the server's word stands.
+        setShiftOverride(null);
+        void qc.invalidateQueries({ queryKey: ME_KEY });
+        continue;
+      }
       if (!deliveryId) continue;
       if (kind === 'stop') {
         if (stopSeq == null) continue;
@@ -195,12 +224,20 @@ export function DriverProvider({ children }: { children: ReactNode }) {
           delete rec[stopSeq];
           return { ...pr, [what]: rec };
         });
+      } else if (kind === 'proof') {
+        if (stopSeq != null)
+          updateProgress(deliveryId, (pr) => {
+            const rec = { ...pr.received };
+            delete rec[stopSeq];
+            return { ...pr, received: rec };
+          });
       } else if (kind === 'start' || kind === 'complete' || kind === 'fail') {
         // Delete, don't restore: overrides is only an optimistic layer, so without the entry
         // `deliveries` falls through to the server's status.
         clearStatus.add(deliveryId);
         // The summary would otherwise keep a receiver's name or a reason for something that never happened.
         if (kind === 'complete') updateProgress(deliveryId, ({ podName: _n, ...pr }) => pr);
+
         if (kind === 'fail') updateProgress(deliveryId, ({ failReason: _r, ...pr }) => pr);
       }
     }
@@ -232,6 +269,12 @@ export function DriverProvider({ children }: { children: ReactNode }) {
       .filter((d) => d.status === 'completed' || d.status === 'failed')
       .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0] ?? null;
 
+  const onShift = shiftOverride ?? (me.on_shift === true || active?.status === 'in_transit');
+  const setShift = (on: boolean) => {
+    setShiftOverride(on);
+    enqueue({ kind: 'shift', path: '/auth/me/shift', body: { on }, label: on ? 'Started shift' : 'Ended shift', at: now() });
+  };
+
   const detailQ = useDeliveryDetail(active?.id ?? null);
   const detail = detailQ.data ?? (cache?.detail && cache.detail.delivery.id === active?.id ? cache.detail : undefined);
 
@@ -243,6 +286,10 @@ export function DriverProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const s = queue.lastSent;
     if (!s || s.kind === 'locations') return;
+    if (s.kind === 'shift') {
+      void qc.invalidateQueries({ queryKey: ME_KEY }).then(() => setShiftOverride(null));
+      return;
+    }
     void qc.invalidateQueries({ queryKey: DELIVERIES_KEY });
     if (s.deliveryId) void qc.invalidateQueries({ queryKey: detailKey(s.deliveryId) });
   }, [queue.sentCount, queue.lastSent, qc]);
@@ -281,6 +328,8 @@ export function DriverProvider({ children }: { children: ReactNode }) {
 
   const start = () => {
     if (!active) return;
+    // The API starts the shift with the delivery; GPS starts now.
+    setShiftOverride(true);
     const at = now();
     setOverrides((o) => ({ ...o, [active.id]: { status: 'in_transit', at } }));
     enqueue({ kind: 'start', path: path(active.id, '/start'), label: 'Started the delivery', at, deliveryId: active.id });
@@ -303,7 +352,7 @@ export function DriverProvider({ children }: { children: ReactNode }) {
       stopAction: what,
     });
   };
-  const completeDelivery = (podName: string) => {
+  const completeDelivery = () => {
     if (!active) return;
     const last = stops[stops.length - 1];
     if (last && !last.done) {
@@ -311,8 +360,6 @@ export function DriverProvider({ children }: { children: ReactNode }) {
       stopEvent(last.seq, 'done');
     }
     const at = now();
-    // TODO(pod-api): the receiver's name needs a field on /complete; kept locally for the summary.
-    updateProgress(active.id, (p) => ({ ...p, podName }));
     setOverrides((o) => ({ ...o, [active.id]: { status: 'completed', at } }));
     enqueue({ kind: 'complete', path: path(active.id, '/complete'), label: 'Completed the delivery', at, deliveryId: active.id });
   };
@@ -323,6 +370,29 @@ export function DriverProvider({ children }: { children: ReactNode }) {
     setOverrides((o) => ({ ...o, [active.id]: { status: 'failed', at } }));
     const label = FAIL_REASONS.find((r) => r.key === reason)?.label ?? 'Problem';
     enqueue({ kind: 'fail', path: path(active.id, '/fail'), body: { reason }, label: `Reported: ${label}`, at, deliveryId: active.id });
+  };
+  const submitProof = (seq: number, proof: ProofInput) => {
+    if (!active) return;
+    const s = stops.find((x) => x.seq === seq);
+    if (!s) return;
+    const at = now();
+    updateProgress(active.id, (p) => ({ ...p, received: { ...p.received, [seq]: proof.receiverName } }));
+    enqueue({
+      kind: 'proof',
+      path: path(active.id, `/stops/${encodeURIComponent(s.id)}/proof`),
+      body: {
+        receiver_name: proof.receiverName,
+        signature: proof.signature,
+        photo: proof.photo,
+        captured_at: at,
+        lat: pos?.lat ?? null,
+        lng: pos?.lng ?? null,
+      },
+      label: `Signed for at stop ${seq}`,
+      at,
+      deliveryId: active.id,
+      stopSeq: seq,
+    });
   };
   const markMessage = (seq: number, i: number) => {
     if (!active) return;
@@ -337,16 +407,24 @@ export function DriverProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('online', on);
   }, []);
 
-  // ---- GPS: watchPosition, batched into POST /locations every ping interval ----
+  // ---- GPS: only on shift. watchPosition, batched into POST /locations every ping interval ----
   const [gpsState, setGpsState] = useState<GpsState>('starting');
   const [lastFixAt, setLastFixAt] = useState<number | null>(null);
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const buffer = useRef<LocationPing[]>([]);
   useEffect(() => {
+    if (!onShift) {
+      // Off shift the phone doesn't track at all, and nothing half-collected is sent.
+      buffer.current = [];
+      setGpsState('off');
+      setPos(null);
+      return;
+    }
     if (!('geolocation' in navigator)) {
       setGpsState('unsupported');
       return;
     }
+    setGpsState('starting');
     const id = navigator.geolocation.watchPosition(
       (p) => {
         const ping: LocationPing = {
@@ -368,9 +446,9 @@ export function DriverProvider({ children }: { children: ReactNode }) {
       { enableHighAccuracy: true, maximumAge: 5_000, timeout: 30_000 },
     );
     return () => navigator.geolocation.clearWatch(id);
-  }, []);
+  }, [onShift]);
   useEffect(() => {
-    if (!truckId) return;
+    if (!truckId || !onShift) return;
     const iv = setInterval(() => {
       let pings = buffer.current;
       buffer.current = [];
@@ -386,7 +464,7 @@ export function DriverProvider({ children }: { children: ReactNode }) {
       });
     }, config.ping_seconds * 1000);
     return () => clearInterval(iv);
-  }, [config, truckId]);
+  }, [config, truckId, onShift]);
 
   // ---- Wake Lock while a delivery is active; paused notice for gaps over 2 minutes ----
   const lock = useRef<WakeLockSentinel | null>(null);
@@ -429,10 +507,15 @@ export function DriverProvider({ children }: { children: ReactNode }) {
   const value: DriverCtx = {
     config,
     truck,
-    truckLabel: truck?.plate_number ?? DEMO_TRUCK,
+    truckLabel: truck?.plate_number ?? 'No truck',
     driverName,
     loading: (listQ.isPending && !cache) || (!!active && !detail && detailQ.isPending),
-    loadError: (listQ.error ?? (trucksQ.data && !truck ? new Error(`Truck ${DEMO_TRUCK} isn't on the dispatch server`) : null)) as Error | null,
+    loadError: (listQ.error ??
+      (!me.truck_id
+        ? new Error("No truck has you as its driver yet. Ask dispatch to set you as a truck's driver.")
+        : trucksQ.data && !truck
+          ? new Error("Your truck isn't on the dispatch server")
+          : null)) as Error | null,
     active,
     detail,
     ended,
@@ -444,6 +527,9 @@ export function DriverProvider({ children }: { children: ReactNode }) {
     arrive: (seq) => stopEvent(seq, 'arrived'),
     completeStop: (seq) => stopEvent(seq, 'done'),
     completeDelivery,
+    submitProof,
+    onShift,
+    setShift,
     fail,
     markMessage,
     gps: { state: gpsState, lastFixAt, pos },

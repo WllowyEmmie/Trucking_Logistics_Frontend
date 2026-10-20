@@ -1,7 +1,7 @@
 'use client';
 
 import { Search } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import type { GeocodePlace } from '@/lib/types';
 import { inputCls } from './ui';
@@ -28,9 +28,13 @@ interface Props {
  */
 export function AddressFinder({ id, value, invalid, describedBy, onChange, onPick }: Props) {
   const [state, setState] = useState<State>({ kind: 'idle' });
+  // Bumped by every search and every edit: an answer for an older one is dropped, so matches for
+  // what the box said a moment ago never show under what it says now.
+  const seq = useRef(0);
   const q = value.trim();
 
   async function find() {
+    const mine = ++seq.current;
     if (q.length < 3) {
       setState({ kind: 'error', message: 'Type at least 3 characters of the address.' });
       return;
@@ -38,9 +42,9 @@ export function AddressFinder({ id, value, invalid, describedBy, onChange, onPic
     setState({ kind: 'searching' });
     try {
       const places = await api<GeocodePlace[]>(`/geocode?q=${encodeURIComponent(q)}`);
-      setState({ kind: 'results', places });
+      if (mine === seq.current) setState({ kind: 'results', places });
     } catch (e) {
-      setState({ kind: 'error', message: e instanceof ApiError ? e.message : 'Address search failed.' });
+      if (mine === seq.current) setState({ kind: 'error', message: e instanceof ApiError ? e.message : 'Address search failed.' });
     }
   }
 
@@ -52,6 +56,7 @@ export function AddressFinder({ id, value, invalid, describedBy, onChange, onPic
           value={value}
           onChange={(e) => {
             onChange(e.target.value);
+            seq.current++;
             if (state.kind !== 'idle') setState({ kind: 'idle' });
           }}
           onKeyDown={(e) => {

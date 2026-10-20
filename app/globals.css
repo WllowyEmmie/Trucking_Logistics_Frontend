@@ -16,11 +16,153 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Thin, themed scrollbars everywhere: the browser default is a wide grey bar in both themes.
-   --border meets 3:1 against the surfaces in light and dark. */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
+/* ---- Scrollbars ----
+   Themed everywhere: a rounded thumb inset from the edge on a clear track, instead of the wide
+   grey default. The thumb is --border, which meets 3:1 against the surfaces in light and dark,
+   and darkens to --ink-muted under the pointer. Chrome, Edge and Safari use the ::-webkit-
+   rules; Firefox, which has no such selector, uses the standard properties. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+}
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: var(--radius-pill);
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ink-muted);
+}
+
+/* ---- Menus: the account menu and every select's option list share this surface ---- */
+:root {
+  --menu-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 8px 24px rgb(0 0 0 / 0.14);
+}
+.dark {
+  --menu-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.5);
+}
+.menu-surface {
+  background: var(--surface-100);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--menu-shadow);
+}
+
+/* ---- Selects ----
+   Every <select> gets the design's field look: token border and radius, and a chevron drawn
+   from two gradients in --ink-muted (so it follows the theme without an image). */
+select {
+  appearance: none;
+  padding-inline-end: 36px;
+  background-color: var(--surface-100);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink-muted) 50%),
+    linear-gradient(135deg, var(--ink-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 19px) 50%,
+    calc(100% - 14px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  border-radius: var(--radius-md);
+  text-overflow: ellipsis;
+}
+[dir='rtl'] select {
+  background-position:
+    14px 50%,
+    19px 50%;
+}
+select:hover:not(:disabled) {
+  border-color: var(--ink-muted);
+}
+select:disabled {
+  cursor: not-allowed;
+}
+
+/* Where the browser lets the option list be styled too (Chrome and Edge 135+), it opens as a
+   menu-surface panel with the design's rows instead of the system list. Elsewhere the closed
+   select still looks right and the list is the system one. */
+@supports (appearance: base-select) {
+  select,
+  ::picker(select) {
+    appearance: base-select;
+  }
+  select {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-inline-end: 10px;
+    background-image: none;
+  }
+  /* The same thin chevron as the closed select elsewhere, instead of the system triangle. */
+  select::picker-icon {
+    content: '';
+    width: 7px;
+    height: 7px;
+    margin-inline-start: auto;
+    border-inline-end: 2px solid var(--ink-muted);
+    border-block-end: 2px solid var(--ink-muted);
+    rotate: 45deg;
+    translate: 0 -2px;
+    transition:
+      rotate 150ms ease-out,
+      translate 150ms ease-out;
+  }
+  select:open::picker-icon {
+    rotate: 225deg;
+    translate: 0 2px;
+  }
+  select:open {
+    border-color: var(--focus-ring);
+  }
+  ::picker(select) {
+    margin-block: 6px;
+    padding: 6px;
+    max-height: min(320px, 60dvh);
+    background: var(--surface-100);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--menu-shadow);
+  }
+  option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    cursor: pointer;
+  }
+  option:hover,
+  option:focus-visible {
+    background: var(--surface-200);
+    outline: none;
+  }
+  option:checked {
+    font-weight: 600;
+    background: var(--accent-bg);
+  }
+  option::checkmark {
+    color: var(--accent);
+    font-weight: 700;
+  }
+  option:disabled {
+    color: var(--ink-subtle);
+    cursor: not-allowed;
+  }
 }
 
 /* `.dark` sits on <body> (see providers.tsx): body must cover the viewport so <html> never shows. */
@@ -28,11 +170,15 @@ body {
   min-height: 100dvh;
 }
 
-a {
-  color: var(--status-assigned);
-}
-a:hover {
-  color: var(--ink);
+/* In the base layer, so a link given a colour class (nav items, buttons styled as links) keeps it:
+   unlayered rules would beat every Tailwind utility. */
+@layer base {
+  a {
+    color: var(--status-assigned);
+  }
+  a:hover {
+    color: var(--ink);
+  }
 }
 
 button:not(:disabled),

@@ -1,6 +1,7 @@
 // Pure rules. No fetching, no React: everything derived for the console header.
 import type { AppConfig } from './config';
 import { formatDuration, formatTime } from './format';
+import { dueState } from './due';
 import { failReasonLabel } from './labels';
 import type { DeliveryListItem, FailReason, Proposal, Truck } from './types';
 
@@ -61,7 +62,9 @@ export function deriveExceptions(
     const mins = Math.floor((now - Date.parse(t.last_seen_at)) / MIN);
     const d = onTruck.get(t.id);
     out.push({
-      key: `silent-${t.id}`,
+      // The silence's start is part of the key: dismissed, it stays dismissed until the truck
+      // reports and then goes silent again.
+      key: `silent-${t.id}-${t.last_seen_at}`,
       issue: 'Truck silent',
       subject: `${t.plate_number} · ${driverName(t.driver_id) ?? 'no driver'}`,
       detail: `No position for ${mins} min · ${d ? `on ${d.reference}` : 'no delivery now'}`,
@@ -103,6 +106,28 @@ export function deriveExceptions(
       since: time(f.at),
       agent: false,
       action: 'View',
+      deliveryId: d.id,
+      truckId: d.truck_id,
+    });
+  }
+
+  // Promised times: late (passed, not delivered) or at risk (the estimate is after it).
+  for (const d of deliveries) {
+    const state = dueState(d, now);
+    if (state !== 'late' && state !== 'at_risk') continue;
+    const due = Date.parse(d.due_by!);
+    out.push({
+      // The due time is part of the key: dismissed, it comes back if the time is changed and missed again.
+      key: `${state}-${d.id}-${d.due_by}`,
+      issue: state === 'late' ? 'Late' : 'At risk',
+      subject: `${d.reference} · ${d.customer_name}`,
+      detail:
+        state === 'late'
+          ? `Due ${time(d.due_by!)} · ${formatDuration((now - due) / MIN)} late${d.eta ? ` · ETA ${time(d.eta)}` : ''}`
+          : `Due ${time(d.due_by!)} · ETA ${time(d.eta!)}, ${formatDuration((Date.parse(d.eta!) - due) / MIN)} after`,
+      since: time(d.due_by!),
+      agent: false,
+      action: d.status === 'pending' ? 'Assign' : 'View',
       deliveryId: d.id,
       truckId: d.truck_id,
     });

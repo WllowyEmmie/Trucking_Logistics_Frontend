@@ -3,19 +3,33 @@
 import { ArrowLeft, Navigation, Phone, TriangleAlert } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DriverScreen } from '@/components/driver/DriverScreen';
 import { HoldToConfirm } from '@/components/driver/HoldToConfirm';
 import { navHref, primaryCls, primaryStyle, secondaryCls, secondaryStyle, topBtnCls } from '@/components/driver/ui';
 import { kindLabel, useStop } from '@/components/driver/useStop';
+import { SignaturePad } from '@/components/driver/SignaturePad';
+import { shrinkPhoto } from '@/lib/image';
 import { StatusPill } from '@/components/StatusPill';
 
-// Current stop: arrive → complete by press-and-hold. The last drop-off asks who received it.
+// Current stop: arrive → complete by press-and-hold. Every drop-off collects proof of delivery
+// first: who received it, their signature, and a photo (Settings decides which are required).
 export default function StopPage() {
   const router = useRouter();
-  const { delivery, detail, stop, index, isCurrent, total, stops, current, time, arrive, completeStop, completeDelivery, loading } = useStop();
+  const { delivery, detail, stop, index, isCurrent, total, stops, current, time, arrive, completeStop, completeDelivery, submitProof, config, loading } = useStop();
+  // Proof of delivery, at every drop-off: who received it, their signature, a photo.
   const [podName, setPodName] = useState('');
-  const [photo, setPhoto] = useState<File | null>(null);
+  const [signature, setSignature] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [photoNote, setPhotoNote] = useState<string | null>(null);
+  // The page stays mounted from one stop to the next: start each drop-off's proof empty.
+  const seqNow = stop?.seq;
+  useEffect(() => {
+    setPodName('');
+    setSignature(null);
+    setPhoto(null);
+    setPhotoNote(null);
+  }, [seqNow]);
 
   const back = (
     <Link href="/driver" className={`${topBtnCls} border-border`} style={{ color: 'var(--ink)' }}>
@@ -88,16 +102,24 @@ export default function StopPage() {
     );
   } else if (!arrived) {
     bottom = <HoldToConfirm label="Hold to confirm arrival" onConfirm={() => arrive(stop.seq)} />;
-  } else if (isLast) {
-    const named = podName.trim().length > 0;
+  } else if (!pickup) {
+    // A drop-off: proof first, then hold.
+    const missing = [
+      !podName.trim() && 'who received it',
+      config.pod_signature_required && !signature && 'their signature',
+      config.pod_photo_required && !photo && 'a photo',
+    ].filter(Boolean) as string[];
     bottom = (
       <HoldToConfirm
-        label="Hold to complete delivery"
-        disabled={!named}
-        hint={named ? 'Hold for about a second' : 'Enter who received it first'}
+        label={isLast ? 'Hold to complete delivery' : 'Hold to complete stop'}
+        disabled={missing.length > 0}
+        hint={missing.length ? `Add ${missing.join(' and ')} first` : 'Hold for about a second'}
         onConfirm={() => {
-          completeDelivery(podName.trim());
-          router.push('/driver/done');
+          submitProof(stop.seq, { receiverName: podName.trim(), signature, photo });
+          if (isLast) {
+            completeDelivery();
+            router.push('/driver/done');
+          } else completeStop(stop.seq);
         }}
       />
     );
@@ -111,7 +133,7 @@ export default function StopPage() {
     );
   }
 
-  const showPod = started && isCurrent && isLast && arrived;
+  const showPod = started && isCurrent && arrived && !pickup;
 
   return (
     <DriverScreen
@@ -144,36 +166,59 @@ export default function StopPage() {
 
       {showPod ? (
         <>
-          {/* TODO(pod-api): the name and photo need a proof-of-delivery field on POST /complete; not sent yet. */}
           <label className="flex flex-col gap-2">
             <span className="t-driver-action">Who received it?</span>
             <input
               value={podName}
               onChange={(e) => setPodName(e.target.value)}
               autoComplete="off"
+              maxLength={100}
               placeholder="Name"
               className="min-h-16 rounded-lg border-2 border-ink bg-surface-100 px-4 text-[20px] font-medium text-ink"
             />
           </label>
+          <div className="flex flex-col gap-2">
+            <span className="t-driver-action">
+              Their signature
+              {!config.pod_signature_required && <span className="t-driver-meta ms-2 font-normal text-ink-muted">optional</span>}
+            </span>
+            <span className="t-driver-meta text-ink-muted">Ask them to check the goods before they sign.</span>
+            <SignaturePad key={stop.seq} onChange={setSignature} label="Receiver signs here" />
+          </div>
           {photo ? (
             <button
               type="button"
               onClick={() => setPhoto(null)}
               className="t-driver-action flex min-h-16 items-center justify-between gap-3 rounded-lg border-2 border-status-completed bg-status-completed-bg px-4 text-start text-ink"
             >
-              <span>Photo added</span>
+              <span className="flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={photo} alt="" className="h-11 w-11 rounded object-cover" />
+                Photo added
+              </span>
               <span className="t-driver-meta text-ink-muted">Tap to remove</span>
             </button>
           ) : (
             <label className="t-driver-action flex min-h-16 cursor-pointer items-center justify-between gap-3 rounded-lg border-2 border-border bg-surface-100 px-4 text-ink focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus-ring)]">
               <span>Add a photo</span>
-              <span className="t-driver-meta text-ink-muted">Optional</span>
+              <span className="t-driver-meta text-ink-muted">{photoNote ?? (config.pod_photo_required ? 'Required' : 'Optional')}</span>
               <input
                 type="file"
                 accept="image/*"
                 capture="environment"
                 className="sr-only"
-                onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!f) return;
+                  setPhotoNote('Preparing…');
+                  shrinkPhoto(f)
+                    .then((url) => {
+                      setPhoto(url);
+                      setPhotoNote(null);
+                    })
+                    .catch((err: Error) => setPhotoNote(err.message));
+                }}
               />
             </label>
           )}

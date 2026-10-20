@@ -1,7 +1,7 @@
 // Maps GET /track/{token} to one of eight view states and everything both layouts show.
 import type { LatLng, MapRoute, MapStop, MapTruck } from '@/components/map/types';
 import { customerEventText, eventAt, failReasonOf, hasLatLng } from '@/lib/deliveries';
-import { describeOffset, formatAgo, formatDate, formatDistance, formatTime, formatWhen, haversineKm, minutesSince, tzAbbr, zonesDiffer } from '@/lib/format';
+import { describeOffset, formatAgo, formatDate, formatDistance, formatDuration, formatTime, formatWhen, haversineKm, minutesSince, tzAbbr, zonesDiffer } from '@/lib/format';
 import type { DeliveryStatus, FailReason, TrackResponse, TrackStop } from '@/lib/types';
 
 export type TrackViewState = DeliveryStatus | 'stale' | 'not_found';
@@ -16,6 +16,8 @@ export interface TimelineStop {
   time: string;
   /** The only drop-off on a single-drop delivery: labelled "Your drop-off". */
   mine: boolean;
+  /** Proof of delivery: who received it, and image addresses when there are images. */
+  proof: { text: string; photo: string | null; signature: string | null } | null;
 }
 
 export interface Notice {
@@ -91,6 +93,8 @@ export interface TrackingOpts {
   operator: string;
   phone: string | null;
   operatorTz: string;
+  /** Where this link's proof images live: `${imageBase}/${seq}/photo`. */
+  imageBase?: string;
 }
 
 export function buildTrackingView(d: TrackResponse, opts: TrackingOpts): TrackingView {
@@ -119,6 +123,14 @@ export function buildTrackingView(d: TrackResponse, opts: TrackingOpts): Trackin
   const distKm = truckPos && nextDrop && hasLatLng(nextDrop) ? haversineKm(truckPos, nextDrop) : null;
   const distLabel = multi && nextDrop ? `Distance to the next drop-off (stop ${nextDrop.sequence})` : 'Distance to your drop-off';
   const goods = d.goods_desc ? [{ k: 'Goods', v: d.goods_desc }] : [];
+  // The promised time, while it's still to come; and the API's estimate (lib/due.ts).
+  const dueFact = d.due_by && live ? [{ k: 'Due by', v: formatWhen(d.due_by, viewerTz, undefined, new Date(now)) }] : [];
+  const etaLabel = multi ? 'Estimated arrival at the last drop-off' : 'Estimated arrival';
+  const etaDetail = () => {
+    const mins = Math.max(0, (Date.parse(d.eta!) - now) / 60_000);
+    const dist = distKm != null ? ` · ${formatDistance(distKm, opts.units)} away` : '';
+    return `${mins < 2 ? 'Any minute now' : `In about ${formatDuration(mins)}`}${dist}. An estimate: traffic can change it.`;
+  };
   const booked = { k: 'Booked', v: formatWhen(d.created_at, viewerTz, undefined, new Date(now)) };
   const truckFact = { k: 'Truck', v: plate ?? 'Assigned' };
   const distEta = (label: string) => (distKm != null ? { label, value: formatDistance(distKm, opts.units), detail: 'Straight-line distance from the truck', hasTime: false } : null);
@@ -132,24 +144,30 @@ export function buildTrackingView(d: TrackResponse, opts: TrackingOpts): Trackin
   let note: string | null = null;
 
   const doneDrops = drops.filter(stopDone).length;
-  const progressSub = multi
-    ? `The truck is on its way. ${doneDrops} of ${drops.length} drop-offs done so far.`
-    : 'The truck has your goods and is heading to you.';
+  // In transit starts when the driver sets off, which is before the pickup: don't say the truck
+  // has the goods until the pickup stop is done.
+  const pickupStop = d.stops.find((s) => s.stop_type === 'pickup');
+  const collected = !pickupStop || stopDone(pickupStop);
+  const onTheWay = collected ? 'On the way to you' : 'On the way to collect your goods';
+  const progressSub = !collected
+    ? 'The truck is on its way to the pickup. It heads to you once your goods are loaded.'
+    : multi
+      ? `The truck is on its way. ${doneDrops} of ${drops.length} drop-offs done so far.`
+      : 'The truck has your goods and is heading to you.';
 
   switch (state) {
     case 'in_transit': {
       const here = nextDrop?.status === 'arrived' && nextDrop.arrived_at ? nextDrop : null;
-      headline = here ? 'The truck has arrived' : 'On the way to you';
+      headline = here ? 'The truck has arrived' : onTheWay;
       sub = here ? `Arrived${multi ? ` at stop ${here.sequence}` : ''} at ${t(here.arrived_at!)}. The driver is unloading.` : progressSub;
       updated = `Updated ${d.truck_seen_at ? formatAgo(d.truck_seen_at, now) : formatAgo(new Date(opts.checkedAt).toISOString(), now)} · refreshes on its own`;
-      // TODO(eta-api): no ETA in the API; distance is the best signal there is.
-      if (!here) eta = distEta(distLabel);
-      facts = [...goods, truckFact, booked];
+      if (!here) eta = d.eta ? { label: etaLabel, value: t(d.eta), detail: etaDetail(), hasTime: true } : distEta(distLabel);
+      facts = [...goods, truckFact, ...dueFact, booked];
       break;
     }
     case 'stale': {
       const seen = d.truck_seen_at!;
-      headline = 'On the way to you';
+      headline = onTheWay;
       sub = progressSub;
       updated = `Last position ${seenMin} min ago`;
       notice = {
@@ -166,7 +184,7 @@ export function buildTrackingView(d: TrackResponse, opts: TrackingOpts): Trackin
       headline = 'Waiting for a truck';
       sub = `${op} has your booking. No truck has been assigned yet, so there is no position to show. This page updates on its own when one is.`;
       updated = `Checked ${formatAgo(new Date(opts.checkedAt).toISOString(), now)}`;
-      facts = [...goods, { k: 'Truck', v: 'Not assigned yet' }, booked];
+      facts = [...goods, { k: 'Truck', v: 'Not assigned yet' }, ...(d.due_by ? [{ k: 'Due by', v: formatWhen(d.due_by, viewerTz, undefined, new Date(now)) }] : []), booked];
       note = 'No truck assigned yet — nothing to track';
       break;
     }
@@ -174,7 +192,13 @@ export function buildTrackingView(d: TrackResponse, opts: TrackingOpts): Trackin
       headline = 'Truck assigned';
       sub = `${plate ? `Truck ${plate}` : 'A truck'} will collect your goods. It hasn't set off yet.`;
       updated = `Updated ${formatAgo(new Date(opts.checkedAt).toISOString(), now)} · refreshes on its own`;
-      facts = [...goods, truckFact, ...(distKm != null ? [{ k: distLabel, v: formatDistance(distKm, opts.units) }] : []), booked];
+      facts = [
+        ...goods,
+        truckFact,
+        ...(d.eta ? [{ k: etaLabel, v: t(d.eta) }] : distKm != null ? [{ k: distLabel, v: formatDistance(distKm, opts.units) }] : []),
+        ...dueFact,
+        booked,
+      ];
       break;
     }
     case 'completed': {
@@ -234,6 +258,13 @@ export function buildTrackingView(d: TrackResponse, opts: TrackingOpts): Trackin
       main: s.address,
       time,
       mine: s === mine,
+      proof: s.proof
+        ? {
+            text: `Received by ${s.proof.receiver_name} at ${t(s.proof.captured_at)}`,
+            photo: s.proof.has_photo && opts.imageBase ? `${opts.imageBase}/${s.sequence}/photo` : null,
+            signature: s.proof.has_signature && opts.imageBase ? `${opts.imageBase}/${s.sequence}/signature` : null,
+          }
+        : null,
     };
   });
 

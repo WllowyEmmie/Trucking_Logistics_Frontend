@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, type ReactNode } from 'react';
+import { DriverGate } from '@/components/auth/Gate';
 import { DriverProvider } from './DriverProvider';
 
 const MOCKING = process.env.NEXT_PUBLIC_API_MOCKING === 'enabled';
@@ -24,8 +25,11 @@ export function DriverRoot({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <DriverProvider>
-      <div className="driver min-h-dvh bg-surface-200">{children}</div>
-    </DriverProvider>
+    <div className="driver min-h-dvh bg-surface-200">
+      {/* Phone number and PIN first; the app opens offline for the last driver signed in. */}
+      <DriverGate>
+        <DriverProvider>{children}</DriverProvider>
+      </DriverGate>
+    </div>
   );
 }
