@@ -11,7 +11,10 @@ export const TRUCKS_KEY = ['trucks'] as const;
 
 /**
  * The position socket (GET /ws on the Go API). Same origin by default, through the /api rewrite like
- * every other call; NEXT_PUBLIC_WS_URL points it elsewhere (the API accepts localhost:3000/3471 only).
+ * every other call. NEXT_PUBLIC_WS_URL points it straight at the API instead, for hosts that can't
+ * forward a socket (Vercel): the sign-in cookie doesn't go there, so the console first gets a
+ * one-minute pass through /api (GET /ws/ticket) and adds it as ?ticket=. The API only accepts the
+ * origins in its CORS_ORIGINS.
  */
 export function positionsSocketUrl(): string {
   const env = process.env.NEXT_PUBLIC_WS_URL;
@@ -66,6 +69,8 @@ type Fix = Pick<Truck, 'lat' | 'lng' | 'last_seen_at'>;
 /** The newest fix seen per truck, so a slower GET /trucks can't move a truck back. */
 const fixes = new Map<string, Fix>();
 let socket: WebSocket | null = null;
+// Waiting for a socket pass (direct connections only).
+let fetchingPass = false;
 let users = 0;
 /**
  * `connecting` until the first open or close, `live` while the socket is open, `down` once it has
@@ -132,10 +137,30 @@ function onMessage(qc: QueryClient, raw: unknown) {
 }
 
 function connect(qc: QueryClient) {
-  if (socket || users === 0) return;
+  if (socket || fetchingPass || users === 0) return;
+  const direct = process.env.NEXT_PUBLIC_WS_URL;
+  if (!direct) return open(qc, positionsSocketUrl());
+  fetchingPass = true;
+  api<{ ticket: string }>('/ws/ticket').then(
+    ({ ticket }) => {
+      fetchingPass = false;
+      if (socket || users === 0) return;
+      const url = new URL(direct);
+      url.searchParams.set('ticket', ticket);
+      open(qc, url.toString());
+    },
+    () => {
+      fetchingPass = false;
+      setStatus('down');
+      schedule(qc);
+    },
+  );
+}
+
+function open(qc: QueryClient, url: string) {
   let ws: WebSocket;
   try {
-    ws = new WebSocket(positionsSocketUrl());
+    ws = new WebSocket(url);
   } catch {
     return schedule(qc);
   }
