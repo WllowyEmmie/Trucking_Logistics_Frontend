@@ -34,6 +34,8 @@ export const SERVER_DEFAULTS: Config = {
   pod_signature_required: true,
   customer_terms: '',
   customer_faq: [],
+  auto_assign: false,
+  auto_radius_km: 2,
   updated_at: null,
 };
 

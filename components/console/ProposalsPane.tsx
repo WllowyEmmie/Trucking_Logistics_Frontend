@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 import { formatTime } from '@/lib/format';
 import type { AppConfig } from '@/lib/config';
+import type { SupervisorAction } from '@/lib/supervisor';
 import type { Proposal } from '@/lib/types';
 
 /** A refused approve or reject: the server's message, word for word, where the card was. */
@@ -29,6 +30,9 @@ interface Props {
   onApprove: (p: Proposal) => void;
   onReject: (p: Proposal) => void;
   onDismiss: (id: string) => void;
+  /** Auto mode on: what the agent did by itself, newest first. */
+  done?: SupervisorAction[];
+  onShowDelivery?: (deliveryId: string) => void;
 }
 
 const btn = 'min-h-11 flex-[1_1_120px] rounded-md text-[14px] font-semibold disabled:opacity-45';
@@ -74,7 +78,7 @@ export function ProposalsPane(p: Props) {
   return (
     <>
       <div className="flex items-center justify-between gap-2 border-b border-divider py-2 ps-4 pe-2">
-        <span className="t-h3 text-agent">Agent proposals · {n}</span>
+        <span className="t-h3 text-agent">{p.config.auto_assign ? `Agent · auto mode · ${n} to review` : `Agent proposals · ${n}`}</span>
         {p.collapsible && (
           <button
             type="button"
@@ -97,8 +101,9 @@ export function ProposalsPane(p: Props) {
           <div className="flex flex-col gap-2.5 pt-2">
             <span className="t-h2">Nothing to review</span>
             <span className="t-body text-ink-muted">
-              When the agent spots something it would change, such as a truck for a waiting delivery, it appears here with its
-              reasoning. Nothing changes until you approve it. Things it only wants you to see show in Needs attention.
+              {p.config.auto_assign
+                ? 'Auto mode is on: the agent gives drivers on shift a truck and assigns new deliveries itself, listed below. Failed deliveries still come here for you to decide.'
+                : 'When the agent spots something it would change, such as a truck for a waiting delivery, it appears here with its reasoning. Nothing changes until you approve it. Things it only wants you to see show in Needs attention.'}
             </span>
             <span className="t-body-sm text-ink-muted">{p.lastCheck}</span>
           </div>
@@ -184,7 +189,44 @@ export function ProposalsPane(p: Props) {
             </article>
           );
         })}
+        {p.config.auto_assign && <DoneList done={p.done ?? []} config={p.config} onShow={p.onShowDelivery} />}
       </div>
     </>
+  );
+}
+
+/** Auto mode's record: each thing the agent did, with its reason. Reassign by hand to undo. */
+function DoneList({ done, config, onShow }: { done: SupervisorAction[]; config: AppConfig; onShow?: (id: string) => void }) {
+  return (
+    <section aria-label="Done automatically" className="flex flex-col gap-2.5 border-t border-divider pt-4">
+      <span className="t-label text-agent">Done automatically</span>
+      {done.length === 0 ? (
+        <span className="t-body-sm text-ink-muted">Nothing yet. New deliveries and drivers starting a shift show here as the agent handles them.</span>
+      ) : (
+        <ol className="m-0 flex list-none flex-col gap-2 p-0">
+          {done.map((a) => (
+            <li key={a.id} className="flex flex-col gap-1 rounded-md border border-border px-3 py-2.5">
+              <span className="t-body-sm flex flex-wrap items-baseline justify-between gap-x-2">
+                <span className="font-semibold">{a.summary}</span>
+                <span className="text-ink-muted">{formatTime(a.created_at, config.timezone, config.locale)}</span>
+              </span>
+              <span className="t-body-sm text-ink-muted">{a.reason}</span>
+              <span className="flex flex-wrap items-center justify-between gap-2">
+                <span className="t-label text-ink-muted">{a.decided_by === 'model' ? 'Chosen by the AI' : 'Nearest-truck rule'}</span>
+                {a.delivery_id && onShow && (
+                  <button
+                    type="button"
+                    onClick={() => onShow(a.delivery_id!)}
+                    className="min-h-9 rounded-md border border-border bg-surface-100 px-2.5 text-[13px] font-semibold text-ink"
+                  >
+                    Show delivery
+                  </button>
+                )}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
   );
 }

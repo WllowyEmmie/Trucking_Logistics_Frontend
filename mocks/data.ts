@@ -193,6 +193,8 @@ function seed(): Db {
     dispatch_phone: '',
     depot: null,
     agent_enabled: true,
+    auto_assign: false,
+    auto_radius_km: 2,
     ...THRESHOLDS,
     eta_speed_kph: 25,
     stop_minutes: 10,

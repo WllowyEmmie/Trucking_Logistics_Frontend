@@ -9,10 +9,13 @@ const MIN = 60_000;
 
 type Thresholds = Pick<AppConfig, 'stale_minutes' | 'pending_minutes' | 'failed_window_minutes' | 'timezone' | 'locale'>;
 
-/** Silent: a truck that should be reporting whose last position is at least `stale_minutes` old. */
+/** Silent: a truck that should be reporting whose last position is at least `stale_minutes` old.
+ *  A truck whose driver is off shift isn't expected to report (the phone stops sharing its
+ *  location), so it's parked, not silent. */
 export function isStale(t: Truck, cfg: Pick<AppConfig, 'stale_minutes'>, now: number): boolean {
   if (t.last_seen_at == null || t.lat == null || t.lng == null) return false;
   if (t.status !== 'on_delivery' && t.status !== 'available') return false;
+  if (!t.driver_id || t.driver_on_shift === false) return false;
   return now - Date.parse(t.last_seen_at) >= cfg.stale_minutes * MIN;
 }
 
@@ -67,7 +70,7 @@ export function deriveExceptions(
       key: `silent-${t.id}-${t.last_seen_at}`,
       issue: 'Truck silent',
       subject: `${t.plate_number} · ${driverName(t.driver_id) ?? 'no driver'}`,
-      detail: `No position for ${mins} min · ${d ? `on ${d.reference}` : 'no delivery now'}`,
+      detail: `No position for ${formatDuration(mins)} · ${d ? `on ${d.reference}` : 'no delivery now'}`,
       since: time(t.last_seen_at),
       agent: false,
       action: 'View',

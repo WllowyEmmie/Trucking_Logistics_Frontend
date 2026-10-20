@@ -185,6 +185,7 @@ export const handlers = [
   http.post(u('/deliveries/:id/stops/:stopId/arrive'), ({ params }) => run(() => mock.advanceStop(String(params.id), String(params.stopId), 'arrive'))),
   http.post(u('/deliveries/:id/stops/:stopId/complete'), ({ params }) => run(() => mock.advanceStop(String(params.id), String(params.stopId), 'complete'))),
 
+  http.get(u('/supervisor/actions'), () => run(() => [])),
   http.get(u('/proposals'), ({ request }) => run(() => mock.proposals(new URL(request.url).searchParams.get('status')))),
   http.post(u('/proposals'), ({ request }) => withBody<Parameters<typeof mock.createProposal>[0]>(request, (b) => mock.createProposal(b), 201)),
   http.post(u('/proposals/:id/approve'), ({ params }) => run(() => mock.approveProposal(String(params.id)))),

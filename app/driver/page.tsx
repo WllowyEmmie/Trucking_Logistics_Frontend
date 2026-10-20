@@ -7,6 +7,7 @@ import { useDriver } from '@/components/driver/DriverProvider';
 import { DriverScreen } from '@/components/driver/DriverScreen';
 import { HoldToConfirm } from '@/components/driver/HoldToConfirm';
 import { ShiftCard } from '@/components/driver/ShiftCard';
+import { GivenTruck } from '@/components/driver/GivenTruck';
 import { StopList } from '@/components/driver/StopList';
 import { primaryCls, primaryStyle, secondaryCls, secondaryStyle, telHref } from '@/components/driver/ui';
 
@@ -41,6 +42,7 @@ export default function DriverToday() {
         }
       >
         <div className="flex flex-col gap-3.5 pt-4">
+          <GivenTruck />
           <div className="flex items-center justify-between gap-3">
             <span className="t-label text-ink-muted">
               {truckLabel}
@@ -90,6 +92,7 @@ export default function DriverToday() {
         ) : null
       }
     >
+      <GivenTruck />
       <div className="flex flex-col gap-2.5">
         <span className="t-label text-ink-muted">Delivery {active.reference}</span>
         <h1 className="t-display m-0">{started && next ? `Stop ${next.seq} of ${total}` : `${total} stops`}</h1>

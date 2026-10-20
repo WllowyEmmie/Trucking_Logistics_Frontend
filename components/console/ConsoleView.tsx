@@ -19,7 +19,7 @@ import {
   useDrivers,
 } from '@/lib/deliveries';
 import { activeByTruck, deriveExceptions, hasPosition, isStale, type ExceptionRow, type FailedInfo } from '@/lib/exceptions';
-import { formatTime, minutesSince, tzAbbr } from '@/lib/format';
+import { formatDuration, formatTime, minutesSince, tzAbbr } from '@/lib/format';
 import { STATUS_LABEL } from '@/lib/labels';
 import { TRUCKS_KEY, usePositions, usePositionsStatus } from '@/lib/positions';
 import type { CreateDeliveryResponse, DeliveryListItem, Proposal, Truck } from '@/lib/types';
@@ -30,6 +30,7 @@ import { ConsoleHeader } from './ConsoleHeader';
 import { DELIVERY_FILTERS, DeliveryList, type AssignError, type DeliveryFilter } from './DeliveryList';
 import type { ReopenMode } from '@/lib/reopen';
 import { ProposalsPane, type ProposalError } from './ProposalsPane';
+import { useSupervisorActions } from '@/lib/supervisor';
 import { TruckList, type TruckFilter } from './TruckList';
 import { tabCls } from './ui';
 
@@ -134,6 +135,7 @@ export function ConsoleView() {
     refetchInterval: 30_000,
     enabled: config.agent_enabled,
   });
+  const doneQ = useSupervisorActions(config.agent_enabled && config.auto_assign);
   const deliveries = useMemo(() => deliveriesQ.data ?? [], [deliveriesQ.data]);
   const trucks = useMemo(() => trucksQ.data ?? [], [trucksQ.data]);
   const T = useMemo(() => new Map(trucks.map((t) => [t.id, t])), [trucks]);
@@ -349,8 +351,8 @@ export function ConsoleView() {
           state: stale ? 'stale' : t.status === 'on_delivery' ? 'live' : 'idle',
           size: on || stale || (pendingSel && t.status === 'available') ? 'md' : 'sm',
           selected: on,
-          label: stale ? `${t.plate_number} · ${mins} min` : on ? t.plate_number : null,
-          aria: `${t.plate_number}, ${driverName(t.driver_id) ?? 'no driver'}, ${STATUS_LABEL[t.status]}${stale ? `, no position for ${mins} minutes` : ''}`,
+          label: stale ? `${t.plate_number} · ${formatDuration(mins)}` : on ? t.plate_number : null,
+          aria: `${t.plate_number}, ${driverName(t.driver_id) ?? 'no driver'}, ${STATUS_LABEL[t.status]}${stale ? `, no position for ${formatDuration(mins)}` : ''}${t.driver_id && t.driver_on_shift === false ? ', driver off shift' : ''}`,
         };
       });
 
@@ -568,6 +570,8 @@ export function ConsoleView() {
               onApprove={(p) => decide.mutate({ p, verb: 'approve' })}
               onReject={(p) => decide.mutate({ p, verb: 'reject' })}
               onDismiss={(id) => setPropErrors(({ [id]: _gone, ...rest }) => rest)}
+              done={doneQ.data}
+              onShowDelivery={selectDelivery}
             />
           </aside>
         )}

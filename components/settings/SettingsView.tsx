@@ -49,6 +49,7 @@ const NUMS = [
   'eta_speed_kph',
   'stop_minutes',
   'board_hours',
+  'auto_radius_km',
 ] as const;
 type NumKey = (typeof NUMS)[number];
 
@@ -66,6 +67,7 @@ type Draft = Record<NumKey, string> & {
   /** The depot box's text: kept apart so typing doesn't lose the picked coordinates until saved. */
   depot_text: string;
   agent_enabled: boolean;
+  auto_assign: boolean;
   pod_photo_required: boolean;
   pod_signature_required: boolean;
   customer_terms: string;
@@ -88,6 +90,7 @@ function fromConfig(c: AppConfig): Draft {
     depot: c.depot,
     depot_text: c.depot?.address ?? '',
     agent_enabled: c.agent_enabled,
+    auto_assign: c.auto_assign,
     pod_photo_required: c.pod_photo_required,
     pod_signature_required: c.pod_signature_required,
     customer_terms: c.customer_terms,
@@ -137,6 +140,7 @@ function check(d: Draft): Problems {
   int('eta_speed_kph', 5, 120, '5 to 120 km/h');
   int('stop_minutes', 0, 240, '0 to 240 minutes');
   int('board_hours', 1, 168, '1 to 168 hours');
+  if (!Number.isFinite(n.auto_radius_km) || n.auto_radius_km < 0.1 || n.auto_radius_km > 100) p.auto_radius_km = '0.1 to 100 km';
   if (d.customer_terms.length > 10000) p.customer_terms = 'At most 10,000 characters';
   if (d.customer_faq.length > 20) p.customer_faq = '20 questions at most';
   const bad = d.customer_faq.findIndex((x) => !x.q.trim() || !x.a.trim() || x.q.length > 200 || x.a.length > 2000);
@@ -164,6 +168,7 @@ function toBody(d: Draft): Omit<Config, 'updated_at' | 'updated_by'> {
     dispatch_phone: toE164(d.dispatch_phone),
     depot: d.depot && d.depot_text.trim() ? { ...d.depot, address: d.depot_text.trim() } : null,
     agent_enabled: d.agent_enabled,
+    auto_assign: d.auto_assign,
     pod_photo_required: d.pod_photo_required,
     pod_signature_required: d.pod_signature_required,
     customer_terms: d.customer_terms,
@@ -175,6 +180,7 @@ function toBody(d: Draft): Omit<Config, 'updated_at' | 'updated_by'> {
     eta_speed_kph: n('eta_speed_kph'),
     stop_minutes: n('stop_minutes'),
     board_hours: n('board_hours'),
+    auto_radius_km: n('auto_radius_km'),
   };
 }
 
@@ -216,6 +222,8 @@ const ROWS: RowMeta[] = [
   { id: 'dispatch', section: 'org', label: 'Dispatch phone', keys: 'number call drivers pin forgot' },
   { id: 'depot', section: 'org', label: 'Depot', keys: 'pickup warehouse address new delivery' },
   { id: 'agent', section: 'org', label: 'Agent', keys: 'ai assistant proposals answers' },
+  { id: 'auto', section: 'org', label: 'Auto mode', keys: 'automatic assign supervisor ai driver truck nearest' },
+  { id: 'autoradius', section: 'org', label: 'Auto mode: near means within', keys: 'automatic assign distance radius km nearest' },
   { id: 'stale', section: 'alerts', label: 'Truck counts as silent after', keys: 'stale gps offline minutes' },
   { id: 'pending', section: 'alerts', label: 'Flag unassigned deliveries after', keys: 'pending waiting minutes' },
   { id: 'failed', section: 'alerts', label: 'Keep failed deliveries in Needs attention for', keys: 'failed window minutes' },
@@ -701,6 +709,24 @@ export function SettingsView() {
               <Row id="agent" label="Agent" help={draft.agent_enabled ? 'On: the agent suggests assignments and answers questions in the console and on tracking pages.' : 'Off: no suggestions, and questions go unanswered.'}>
                 <Switch id={f('agent')} label="Agent" on={draft.agent_enabled} onChange={(v) => set({ agent_enabled: v })} />
               </Row>
+              <Row
+                id="auto"
+                label="Auto mode"
+                help={
+                  !draft.agent_enabled
+                    ? 'Needs the agent switched on.'
+                    : draft.auto_assign
+                      ? 'On: the agent acts instead of suggesting. A driver who starts a shift with no truck gets a free one, and each new delivery goes to the nearest truck whose driver is on shift. Everything it does is listed on the console with its reason, and you can reassign by hand. Failed deliveries still come to you as suggestions.'
+                      : 'Off: the agent suggests assignments and you approve them.'
+                }
+              >
+                <Switch id={f('auto')} label="Auto mode" on={draft.auto_assign} onChange={(v) => set({ auto_assign: v })} />
+              </Row>
+              {draft.auto_assign && (
+                <Row id="autoradius" label="Near means within" htmlFor={f('autoradius')} help="A truck this close to the pickup is chosen first. With none that close, the nearest truck anywhere is." error={err('auto_radius_km')}>
+                  <NumberBox id={f('autoradius')} step="0.5" value={draft.auto_radius_km} onChange={(v) => set({ auto_radius_km: v })} error={!!err('auto_radius_km')} suffix="km" />
+                </Row>
+              )}
             </Section>
 
             <Section id="alerts" visible={sectionShows('alerts')}>

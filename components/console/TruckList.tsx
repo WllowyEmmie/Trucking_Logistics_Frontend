@@ -2,7 +2,7 @@
 
 import { StatusPill } from '@/components/StatusPill';
 import { isStale } from '@/lib/exceptions';
-import { formatWhen, secondsSince } from '@/lib/format';
+import { formatSince, formatWhen } from '@/lib/format';
 import type { AppConfig } from '@/lib/config';
 import type { DeliveryListItem, Truck, TruckStatus } from '@/lib/types';
 import { useNow } from '@/lib/useNow';
@@ -61,13 +61,17 @@ export function TruckList({ trucks, config, driverName, deliveryOf, filter, onFi
           let dot = { color: 'var(--status-completed)', style: 'solid', fill: 'var(--status-completed)' };
           let bold = false;
           if (stale && t.last_seen_at) {
-            sub = `No position for ${Math.floor(secondsSince(t.last_seen_at, now) / 60)} min${deliveryOf(t.id) ? ` · ${deliveryOf(t.id)!.reference}` : ''}`;
+            sub = `No position for ${formatSince(t.last_seen_at, now)}${deliveryOf(t.id) ? ` · ${deliveryOf(t.id)!.reference}` : ''}`;
             dot = { color: 'var(--marker-stale)', style: 'dashed', fill: 'transparent' };
             bold = true;
           } else if (t.status === 'on_delivery') {
-            sub = `${deliveryOf(t.id)?.reference ?? 'No delivery'} · ${t.last_seen_at ? `ping ${secondsSince(t.last_seen_at, now)} s ago` : 'no position yet'}`;
+            sub = `${deliveryOf(t.id)?.reference ?? 'No delivery'} · ${t.last_seen_at ? `ping ${formatSince(t.last_seen_at, now)} ago` : 'no position yet'}`;
+          } else if (t.status === 'available' && (!t.driver_id || t.driver_on_shift === false)) {
+            // Nobody driving it: no GPS is expected, so it's parked, not silent.
+            sub = `Parked${t.last_seen_at ? ` · last seen ${formatSince(t.last_seen_at, now)} ago` : ' · no position yet'}`;
+            dot = { color: 'var(--ink-muted)', style: 'solid', fill: 'transparent' };
           } else if (t.status === 'available') {
-            sub = t.last_seen_at ? `Free · ping ${secondsSince(t.last_seen_at, now)} s ago` : 'Free · no position yet';
+            sub = t.last_seen_at ? `Free · ping ${formatSince(t.last_seen_at, now)} ago` : 'Free · no position yet';
           } else if (t.status === 'maintenance') {
             sub = 'In the workshop';
             dot = { color: 'var(--ink-muted)', style: 'solid', fill: 'var(--ink-muted)' };

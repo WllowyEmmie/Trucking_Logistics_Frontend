@@ -43,6 +43,7 @@ const TOPIC_KEYS: Record<string, readonly (readonly string[])[]> = {
   drivers: [DRIVERS_KEY],
   proposals: [['proposals']],
   config: [CONFIG_KEY],
+  supervisor: [['supervisor']],
 };
 
 /** Several changes in a burst (assign = delivery + truck + proposal) become one refetch per key. */

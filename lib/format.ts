@@ -48,13 +48,25 @@ export function secondsSince(iso: string | number, now: number = Date.now()): nu
   return Math.max(0, Math.round((now - t) / 1000));
 }
 
-/** "26 min", "2 h 14 min" */
+/** "26 min", "2 h 14 min", "3 days 4 h", from a week "9 days". The one way every "how long" reads. */
 export function formatDuration(minutes: number): string {
   const m = Math.max(0, Math.round(minutes));
   if (m < 60) return `${m} min`;
-  const h = Math.floor(m / 60);
-  const r = m % 60;
-  return r ? `${h} h ${r} min` : `${h} h`;
+  if (m < 24 * 60) {
+    const h = Math.floor(m / 60);
+    const r = m % 60;
+    return r ? `${h} h ${r} min` : `${h} h`;
+  }
+  const d = Math.floor(m / (24 * 60));
+  const h = Math.floor((m % (24 * 60)) / 60);
+  const days = `${d} ${d === 1 ? 'day' : 'days'}`;
+  return d >= 7 || !h ? days : `${days} ${h} h`;
+}
+
+/** How long since: "40 s", then as formatDuration ("12 min", "3 h 5 min", "2 days 1 h"). */
+export function formatSince(iso: string, now: number = Date.now()): string {
+  const s = secondsSince(iso, now);
+  return s < 60 ? `${Math.max(0, Math.floor(s))} s` : formatDuration(s / 60);
 }
 
 /** "Updated 1 min ago" style. */

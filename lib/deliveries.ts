@@ -88,6 +88,9 @@ export function eventText(e: DeliveryEvent, stops?: Stop[]): string {
       return 'Created';
     case 'assigned':
       return e.note ? cap(e.note) : 'Assigned';
+    case 'auto_assigned':
+      // "automatically: Nearest ready truck: 0.4 km from the pickup at …"
+      return e.note ? `Assigned ${e.note.replace(/^automatically: /, 'automatically · ')}` : 'Assigned automatically';
     case 'in_transit':
       return 'Started';
     case 'stop_arrived':

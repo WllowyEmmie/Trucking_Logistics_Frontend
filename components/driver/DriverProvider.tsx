@@ -90,6 +90,9 @@ interface DriverCtx {
   /** On shift: GPS runs and is recorded only then. */
   onShift: boolean;
   setShift: (on: boolean) => void;
+  /** A truck dispatch (or auto mode) just gave this driver, until they dismiss the notice. */
+  givenTruck: Truck | null;
+  dismissGiven: () => void;
   fail: (reason: FailReason) => void;
   markMessage: (seq: number, i: number) => void;
   gps: { state: GpsState; lastFixAt: number | null; pos: { lat: number; lng: number } | null };
@@ -170,6 +173,25 @@ export function DriverProvider({ children }: { children: ReactNode }) {
     trucksQ.data?.find((t) => t.id === me.truck_id) ?? (cache?.truck && cache.truck.id === me.truck_id ? cache.truck : undefined);
   const truckId = truck?.id ?? null;
   const driverName = me.name || null;
+
+  // No truck yet: ask again every 15 s, so a truck given by dispatch (or auto mode) shows up without
+  // a reload. When one arrives, say so once.
+  const noTruck = !me.truck_id;
+  useEffect(() => {
+    if (!noTruck) return;
+    const id = setInterval(() => void qc.invalidateQueries({ queryKey: ME_KEY }), 15_000);
+    return () => clearInterval(id);
+  }, [noTruck, qc]);
+  const lastTruckId = useRef(me.truck_id ?? null);
+  const [givenId, setGivenId] = useState<string | null>(null);
+  useEffect(() => {
+    const now = me.truck_id ?? null;
+    if (now && now !== lastTruckId.current) {
+      setGivenId(now);
+      void qc.invalidateQueries({ queryKey: TRUCKS_KEY });
+    }
+    lastTruckId.current = now;
+  }, [me.truck_id, qc]);
 
   // ---- Deliveries: the list has no truck filter, so it's filtered here. ----
   const listQ = useDeliveries(15_000);
@@ -512,7 +534,13 @@ export function DriverProvider({ children }: { children: ReactNode }) {
     loading: (listQ.isPending && !cache) || (!!active && !detail && detailQ.isPending),
     loadError: (listQ.error ??
       (!me.truck_id
-        ? new Error("No truck has you as its driver yet. Ask dispatch to set you as a truck's driver.")
+        ? new Error(
+            config.auto_assign && onShift
+              ? "You're on shift. You'll be given a free truck as soon as one is available; this page updates by itself."
+              : config.auto_assign
+                ? 'No truck has you as its driver yet. Start your shift and you’ll be given a free truck.'
+                : "No truck has you as its driver yet. Ask dispatch to set you as a truck's driver.",
+          )
         : trucksQ.data && !truck
           ? new Error("Your truck isn't on the dispatch server")
           : null)) as Error | null,
@@ -530,6 +558,8 @@ export function DriverProvider({ children }: { children: ReactNode }) {
     submitProof,
     onShift,
     setShift,
+    givenTruck: givenId && truck && truck.id === givenId ? truck : null,
+    dismissGiven: () => setGivenId(null),
     fail,
     markMessage,
     gps: { state: gpsState, lastFixAt, pos },

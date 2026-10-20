@@ -169,10 +169,10 @@ export function buildTrackingView(d: TrackResponse, opts: TrackingOpts): Trackin
       const seen = d.truck_seen_at!;
       headline = onTheWay;
       sub = progressSub;
-      updated = `Last position ${seenMin} min ago`;
+      updated = `Last position ${formatDuration(seenMin!)} ago`;
       notice = {
         tone: 'stale',
-        title: `Truck position is ${seenMin} minutes old`,
+        title: `Truck position is ${formatDuration(seenMin!)} old`,
         body: `The driver's phone last reported at ${t(seen)}. The delivery is still in progress. The map shows that last known position, not where the truck is now.`,
       };
       eta = distEta('Distance at last position');

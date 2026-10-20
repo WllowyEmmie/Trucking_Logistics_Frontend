@@ -370,6 +370,10 @@ export interface Config {
   /** The tracking page's Delivery terms and Help tabs. {company} and {support_phone} are filled in. */
   customer_terms: string;
   customer_faq: { q: string; a: string }[];
+  /** Auto mode: the agent gives drivers on shift a free truck and assigns new deliveries itself,
+   *  to the nearest ready truck within auto_radius_km of the pickup, else the nearest anywhere. */
+  auto_assign: boolean;
+  auto_radius_km: number;
   /** null until someone saves settings (environment defaults in effect). */
   updated_at?: string | null;
   /** Dispatchers only. */
