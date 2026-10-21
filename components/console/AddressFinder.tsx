@@ -19,6 +19,8 @@ interface Props {
   describedBy?: string;
   onChange: (address: string) => void;
   onPick: (place: GeocodePlace) => void;
+  /** Where to search: the console's /geocode, or the booking page's limited /book/geocode. */
+  searchPath?: string;
 }
 
 /**
@@ -26,7 +28,7 @@ interface Props {
  * Picking a match fills the stop's coordinates, so nobody has to know them. Enter searches rather
  * than submitting the form. If the search is down, the coordinates can still be typed.
  */
-export function AddressFinder({ id, value, invalid, describedBy, onChange, onPick }: Props) {
+export function AddressFinder({ id, value, invalid, describedBy, onChange, onPick, searchPath = '/geocode' }: Props) {
   const [state, setState] = useState<State>({ kind: 'idle' });
   // Bumped by every search and every edit: an answer for an older one is dropped, so matches for
   // what the box said a moment ago never show under what it says now.
@@ -41,7 +43,7 @@ export function AddressFinder({ id, value, invalid, describedBy, onChange, onPic
     }
     setState({ kind: 'searching' });
     try {
-      const places = await api<GeocodePlace[]>(`/geocode?q=${encodeURIComponent(q)}`);
+      const places = await api<GeocodePlace[]>(`${searchPath}?q=${encodeURIComponent(q)}`);
       if (mine === seq.current) setState({ kind: 'results', places });
     } catch (e) {
       if (mine === seq.current) setState({ kind: 'error', message: e instanceof ApiError ? e.message : 'Address search failed.' });

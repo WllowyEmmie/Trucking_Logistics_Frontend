@@ -374,6 +374,13 @@ export interface Config {
    *  to the nearest ready truck within auto_radius_km of the pickup, else the nearest anywhere. */
   auto_assign: boolean;
   auto_radius_km: number;
+  /** The public booking page (/book): open or not, where customers write, and the price in naira:
+   *  price_base + price_per_km × estimated road km, at least price_minimum. */
+  booking_enabled: boolean;
+  dispatch_email: string;
+  price_base: number;
+  price_per_km: number;
+  price_minimum: number;
   /** null until someone saves settings (environment defaults in effect). */
   updated_at?: string | null;
   /** Dispatchers only. */

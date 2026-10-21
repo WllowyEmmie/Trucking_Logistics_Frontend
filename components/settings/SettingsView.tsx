@@ -50,6 +50,9 @@ const NUMS = [
   'stop_minutes',
   'board_hours',
   'auto_radius_km',
+  'price_base',
+  'price_per_km',
+  'price_minimum',
 ] as const;
 type NumKey = (typeof NUMS)[number];
 
@@ -68,6 +71,8 @@ type Draft = Record<NumKey, string> & {
   depot_text: string;
   agent_enabled: boolean;
   auto_assign: boolean;
+  booking_enabled: boolean;
+  dispatch_email: string;
   pod_photo_required: boolean;
   pod_signature_required: boolean;
   customer_terms: string;
@@ -91,6 +96,8 @@ function fromConfig(c: AppConfig): Draft {
     depot_text: c.depot?.address ?? '',
     agent_enabled: c.agent_enabled,
     auto_assign: c.auto_assign,
+    booking_enabled: c.booking_enabled,
+    dispatch_email: c.dispatch_email,
     pod_photo_required: c.pod_photo_required,
     pod_signature_required: c.pod_signature_required,
     customer_terms: c.customer_terms,
@@ -141,6 +148,11 @@ function check(d: Draft): Problems {
   int('stop_minutes', 0, 240, '0 to 240 minutes');
   int('board_hours', 1, 168, '1 to 168 hours');
   if (!Number.isFinite(n.auto_radius_km) || n.auto_radius_km < 0.1 || n.auto_radius_km > 100) p.auto_radius_km = '0.1 to 100 km';
+  int('price_base', 0, 10_000_000, '0 to 10,000,000');
+  int('price_per_km', 0, 1_000_000, '0 to 1,000,000');
+  int('price_minimum', 0, 10_000_000, '0 to 10,000,000');
+  if (d.dispatch_email.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.dispatch_email.trim())) p.dispatch_email = "That doesn't look like an email address";
+  if (d.booking_enabled && n.price_base + n.price_per_km + n.price_minimum === 0) p.price_base = 'Online booking needs a price';
   if (d.customer_terms.length > 10000) p.customer_terms = 'At most 10,000 characters';
   if (d.customer_faq.length > 20) p.customer_faq = '20 questions at most';
   const bad = d.customer_faq.findIndex((x) => !x.q.trim() || !x.a.trim() || x.q.length > 200 || x.a.length > 2000);
@@ -169,6 +181,8 @@ function toBody(d: Draft): Omit<Config, 'updated_at' | 'updated_by'> {
     depot: d.depot && d.depot_text.trim() ? { ...d.depot, address: d.depot_text.trim() } : null,
     agent_enabled: d.agent_enabled,
     auto_assign: d.auto_assign,
+    booking_enabled: d.booking_enabled,
+    dispatch_email: d.dispatch_email.trim(),
     pod_photo_required: d.pod_photo_required,
     pod_signature_required: d.pod_signature_required,
     customer_terms: d.customer_terms,
@@ -181,6 +195,9 @@ function toBody(d: Draft): Omit<Config, 'updated_at' | 'updated_by'> {
     stop_minutes: n('stop_minutes'),
     board_hours: n('board_hours'),
     auto_radius_km: n('auto_radius_km'),
+    price_base: n('price_base'),
+    price_per_km: n('price_per_km'),
+    price_minimum: n('price_minimum'),
   };
 }
 
@@ -196,12 +213,13 @@ interface RowMeta {
   keys: string;
 }
 
-type SectionId = 'region' | 'map' | 'org' | 'alerts' | 'customers' | 'look';
+type SectionId = 'region' | 'map' | 'org' | 'booking' | 'alerts' | 'customers' | 'look';
 
 const SECTIONS: { id: SectionId; title: string; icon: ReactNode; blurb: string }[] = [
   { id: 'region', title: 'Region', icon: <Globe2 size={18} aria-hidden="true" />, blurb: 'Country, time zone, language and units.' },
   { id: 'map', title: 'Map and service area', icon: <MapIcon size={18} aria-hidden="true" />, blurb: 'Where the map opens, and where stops and GPS positions are accepted.' },
   { id: 'org', title: 'Organisation', icon: <Building2 size={18} aria-hidden="true" />, blurb: 'What customers and drivers see.' },
+  { id: 'booking', title: 'Website and booking', icon: <Globe2 size={18} aria-hidden="true" />, blurb: 'The public website: online booking, prices and how customers reach dispatch.' },
   { id: 'alerts', title: 'Tracking and alerts', icon: <SlidersHorizontal size={18} aria-hidden="true" />, blurb: 'When something lands in Needs attention, and how arrival times are estimated.' },
   { id: 'customers', title: 'Proof and customer page', icon: <FileSignature size={18} aria-hidden="true" />, blurb: 'What drivers collect at drop-offs, and what customers read on their tracking link.' },
   { id: 'look', title: 'Appearance', icon: <Palette size={18} aria-hidden="true" />, blurb: 'For this browser only.' },
@@ -224,6 +242,11 @@ const ROWS: RowMeta[] = [
   { id: 'agent', section: 'org', label: 'Agent', keys: 'ai assistant proposals answers' },
   { id: 'auto', section: 'org', label: 'Auto mode', keys: 'automatic assign supervisor ai driver truck nearest' },
   { id: 'autoradius', section: 'org', label: 'Auto mode: near means within', keys: 'automatic assign distance radius km nearest' },
+  { id: 'booking', section: 'booking', label: 'Online booking', keys: 'website book request paystack pay customers landing' },
+  { id: 'demail', section: 'booking', label: 'Dispatch email', keys: 'contact website email request' },
+  { id: 'pbase', section: 'booking', label: 'Base fee', keys: 'price naira cost quote' },
+  { id: 'pkm', section: 'booking', label: 'Price per km', keys: 'price naira distance quote rate' },
+  { id: 'pmin', section: 'booking', label: 'Minimum price', keys: 'price naira quote floor' },
   { id: 'stale', section: 'alerts', label: 'Truck counts as silent after', keys: 'stale gps offline minutes' },
   { id: 'pending', section: 'alerts', label: 'Flag unassigned deliveries after', keys: 'pending waiting minutes' },
   { id: 'failed', section: 'alerts', label: 'Keep failed deliveries in Needs attention for', keys: 'failed window minutes' },
@@ -829,6 +852,32 @@ export function SettingsView() {
                     Add a question
                   </button>
                 )}
+              </Row>
+            </Section>
+
+            <Section id="booking" visible={sectionShows('booking')}>
+              <Row
+                id="booking"
+                label="Online booking"
+                help={
+                  draft.booking_enabled
+                    ? 'On: anyone can book and pay on the website (/book). A paid booking becomes a pending delivery here. Payment needs PAYSTACK_SECRET_KEY on the API.'
+                    : 'Off: the website shows the price and your contact details, and the booking button opens an email to dispatch.'
+                }
+              >
+                <Switch id={f('booking')} label="Online booking" on={draft.booking_enabled} onChange={(v) => set({ booking_enabled: v })} />
+              </Row>
+              <Row id="demail" label="Dispatch email" htmlFor={f('demail')} help="Shown on the website for customers who'd rather write. Optional." error={err('dispatch_email')}>
+                <input id={f('demail')} type="email" value={draft.dispatch_email} maxLength={200} onChange={(e) => set({ dispatch_email: e.target.value })} className={`${inputCls(!!err('dispatch_email'))} w-full`} />
+              </Row>
+              <Row id="pbase" label="Base fee" htmlFor={f('pbase')} help="Every booking starts at this, in naira." error={err('price_base')}>
+                <NumberBox id={f('pbase')} step="100" value={draft.price_base} onChange={(v) => set({ price_base: v })} error={!!err('price_base')} suffix="₦" />
+              </Row>
+              <Row id="pkm" label="Price per km" htmlFor={f('pkm')} help="Times the estimated road distance through all the stops (straight lines × 1.3)." error={err('price_per_km')}>
+                <NumberBox id={f('pkm')} step="50" value={draft.price_per_km} onChange={(v) => set({ price_per_km: v })} error={!!err('price_per_km')} suffix="₦/km" />
+              </Row>
+              <Row id="pmin" label="Minimum price" htmlFor={f('pmin')} help="No booking costs less. Prices round up to the next ₦100." error={err('price_minimum')}>
+                <NumberBox id={f('pmin')} step="500" value={draft.price_minimum} onChange={(v) => set({ price_minimum: v })} error={!!err('price_minimum')} suffix="₦" />
               </Row>
             </Section>
 

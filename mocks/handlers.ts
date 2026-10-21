@@ -186,6 +186,10 @@ export const handlers = [
   http.post(u('/deliveries/:id/stops/:stopId/complete'), ({ params }) => run(() => mock.advanceStop(String(params.id), String(params.stopId), 'complete'))),
 
   http.get(u('/supervisor/actions'), () => run(() => [])),
+  // Booking: a rough price, and no payments in mock mode.
+  http.get(u('/book/geocode'), ({ request }) => run(() => mock.geocode(new URL(request.url).searchParams.get('q')))),
+  http.post(u('/book/quote'), () => HttpResponse.json({ distance_km: 18.4, amount: 12400, currency: 'NGN' })),
+  http.post(u('/book'), () => HttpResponse.json({ error: 'payments are off in mock mode' }, { status: 503 })),
   http.get(u('/proposals'), ({ request }) => run(() => mock.proposals(new URL(request.url).searchParams.get('status')))),
   http.post(u('/proposals'), ({ request }) => withBody<Parameters<typeof mock.createProposal>[0]>(request, (b) => mock.createProposal(b), 201)),
   http.post(u('/proposals/:id/approve'), ({ params }) => run(() => mock.approveProposal(String(params.id)))),

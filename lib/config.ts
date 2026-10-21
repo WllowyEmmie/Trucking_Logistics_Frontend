@@ -36,6 +36,11 @@ export const SERVER_DEFAULTS: Config = {
   customer_faq: [],
   auto_assign: false,
   auto_radius_km: 2,
+  booking_enabled: false,
+  dispatch_email: '',
+  price_base: 5000,
+  price_per_km: 400,
+  price_minimum: 10000,
   updated_at: null,
 };
 

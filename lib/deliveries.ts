@@ -85,7 +85,7 @@ const dueNote = (iso: string) => {
 export function eventText(e: DeliveryEvent, stops?: Stop[]): string {
   switch (e.event_type) {
     case 'created':
-      return 'Created';
+      return e.note ? `Created · ${e.note}` : 'Created';
     case 'assigned':
       return e.note ? cap(e.note) : 'Assigned';
     case 'auto_assigned':
