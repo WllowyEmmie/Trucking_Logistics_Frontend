@@ -265,3 +265,22 @@ button:not(:disabled),
 .dm-link {
   stroke: var(--map-ink);
 }
+
+/* Landing page: text blocks fade the road out behind them, so the truck passes under the words
+   instead of across them. A patch of the section's colour, solid over the text and thinning out
+   ever more slowly into its margin. --cover is the section's background. */
+.road-cover {
+  position: relative;
+}
+.road-cover::before {
+  content: '';
+  --pad-x: 72px;
+  --pad-y: 44px;
+  position: absolute;
+  inset: calc(-1 * var(--pad-y)) calc(-1 * var(--pad-x));
+  z-index: -1;
+  background: var(--cover, var(--surface-100));
+  mask-image: linear-gradient(to right, rgb(0 0 0 / 0) calc(var(--pad-x) * 0), rgb(0 0 0 / 0.03) calc(var(--pad-x) * 0.15), rgb(0 0 0 / 0.1) calc(var(--pad-x) * 0.3), rgb(0 0 0 / 0.28) calc(var(--pad-x) * 0.5), rgb(0 0 0 / 0.55) calc(var(--pad-x) * 0.7), rgb(0 0 0 / 0.82) calc(var(--pad-x) * 0.86), rgb(0 0 0 / 1) calc(var(--pad-x) * 1), rgb(0 0 0 / 1) calc(100% - var(--pad-x) * 1), rgb(0 0 0 / 0.82) calc(100% - var(--pad-x) * 0.86), rgb(0 0 0 / 0.55) calc(100% - var(--pad-x) * 0.7), rgb(0 0 0 / 0.28) calc(100% - var(--pad-x) * 0.5), rgb(0 0 0 / 0.1) calc(100% - var(--pad-x) * 0.3), rgb(0 0 0 / 0.03) calc(100% - var(--pad-x) * 0.15), rgb(0 0 0 / 0) calc(100% - var(--pad-x) * 0)), linear-gradient(to bottom, rgb(0 0 0 / 0) calc(var(--pad-y) * 0), rgb(0 0 0 / 0.03) calc(var(--pad-y) * 0.15), rgb(0 0 0 / 0.1) calc(var(--pad-y) * 0.3), rgb(0 0 0 / 0.28) calc(var(--pad-y) * 0.5), rgb(0 0 0 / 0.55) calc(var(--pad-y) * 0.7), rgb(0 0 0 / 0.82) calc(var(--pad-y) * 0.86), rgb(0 0 0 / 1) calc(var(--pad-y) * 1), rgb(0 0 0 / 1) calc(100% - var(--pad-y) * 1), rgb(0 0 0 / 0.82) calc(100% - var(--pad-y) * 0.86), rgb(0 0 0 / 0.55) calc(100% - var(--pad-y) * 0.7), rgb(0 0 0 / 0.28) calc(100% - var(--pad-y) * 0.5), rgb(0 0 0 / 0.1) calc(100% - var(--pad-y) * 0.3), rgb(0 0 0 / 0.03) calc(100% - var(--pad-y) * 0.15), rgb(0 0 0 / 0) calc(100% - var(--pad-y) * 0));
+  mask-composite: intersect;
+  pointer-events: none;
+}

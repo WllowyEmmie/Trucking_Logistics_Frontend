@@ -11,6 +11,7 @@ import { telHref } from '@/components/tracking/TrackingPhone';
 import { ApiError } from '@/lib/api';
 import { GEOCODE_PATH, getQuote, makeBooking, naira, requestMailto, type BookingStop, type Quote } from '@/lib/booking';
 import { useConfig } from '@/lib/config';
+import { prettyPhone, useSite } from '@/lib/site';
 import { defaultPhoneCountry, emptyPhone, phoneProblem, toE164, type PhoneValue } from '@/lib/phone';
 
 // The public booking form: route, contact, price, then Paystack. Nothing is booked until it's paid;
@@ -34,6 +35,7 @@ type QuoteState = { kind: 'none' } | { kind: 'loading' } | { kind: 'ok'; q: Quot
 
 export default function BookPage() {
   const c = useConfig();
+  const site = useSite();
   const home = c.country || defaultPhoneCountry(c);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -125,16 +127,12 @@ export default function BookPage() {
             Online booking isn&apos;t open yet. Send dispatch your pickup, drop-offs and what&apos;s being moved, and they&apos;ll reply with a price.
           </p>
           <div className="flex flex-wrap gap-3">
-            {c.dispatch_email && (
-              <a href={requestMailto(c.dispatch_email, c.operator_name)} className="inline-flex min-h-12 items-center rounded-md bg-ink px-5 text-[15px] font-semibold text-surface-100 no-underline">
-                Email {c.dispatch_email}
-              </a>
-            )}
-            {c.support_phone && (
-              <a href={telHref(c.support_phone)} className="inline-flex min-h-12 items-center rounded-md border border-border px-5 text-[15px] font-semibold text-ink no-underline">
-                Call {c.support_phone}
-              </a>
-            )}
+            <a href={requestMailto(site.email, site.name)} className="inline-flex min-h-12 items-center rounded-md bg-ink px-5 text-[15px] font-semibold text-surface-100 no-underline">
+              Email {site.email}
+            </a>
+            <a href={telHref(site.phone)} className="inline-flex min-h-12 items-center rounded-md border border-border px-5 text-[15px] font-semibold text-ink no-underline">
+              Call {prettyPhone(site.phone)}
+            </a>
           </div>
         </main>
       </SiteShell>

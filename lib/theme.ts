@@ -1,6 +1,8 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { useEffect, useSyncExternalStore } from 'react';
+import { isPublicPath } from './site';
 
 /**
  * Light, dark, or whatever the OS says. A per-browser convenience, kept in localStorage; if that
@@ -53,16 +55,18 @@ export function useThemePref(): ThemePref {
 /** Applies the preference to the page. Mounted once, in Providers. */
 export function useApplyTheme() {
   const p = useThemePref();
+  // The public website is always light; the theme switch is for the console and driver app.
+  const publicPage = isPublicPath(usePathname());
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const apply = () => {
-      const dark = p === 'dark' || (p === 'system' && mq.matches);
+      const dark = !publicPage && (p === 'dark' || (p === 'system' && mq.matches));
       document.body.classList.toggle('dark', dark);
       document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
     };
     apply();
-    if (p !== 'system') return;
+    if (p !== 'system' || publicPage) return;
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
-  }, [p]);
+  }, [p, publicPage]);
 }
