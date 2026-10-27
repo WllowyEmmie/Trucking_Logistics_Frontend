@@ -8,7 +8,7 @@ import { primaryCls, primaryStyle } from '@/components/driver/ui';
 import { ApiError } from '@/lib/api';
 import { useConfig } from '@/lib/config';
 import { defaultPhoneCountry, emptyPhone, toE164, type PhoneValue } from '@/lib/phone';
-import { ME_KEY, driverSignIn, signIn, type Me } from '@/lib/auth';
+import { ME_KEY, changeMyPin, driverSignIn, signIn, type Me } from '@/lib/auth';
 
 function message(e: unknown, fallback: string): string {
   if (e instanceof ApiError) return e.status === 0 ? 'Could not reach the dispatch server. Check the connection.' : e.message;
@@ -142,6 +142,71 @@ export function DriverSignIn() {
           {config.dispatch_phone && (
             <span className="t-driver-meta text-center text-ink-muted">Forgot your PIN? Call dispatch on {config.dispatch_phone}.</span>
           )}
+        </div>
+      </form>
+    </main>
+  );
+}
+
+/**
+ * First sign-in on the default PIN (1234): the driver picks their own, twice, before anything else.
+ * The API refuses everything but this until they do (pin_change_required), and starts their shift
+ * once it's changed.
+ */
+export function ChooseDriverPin({ name }: { name: string }) {
+  const done = useSignedIn();
+  const config = useConfig();
+  const [pin, setPin] = useState('');
+  const [again, setAgain] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const mismatch = again.length >= pin.length && again.length > 0 && again !== pin;
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (pin !== again) return setError("The two PINs don't match.");
+    if (pin === '1234') return setError('Choose a PIN other than 1234.');
+    setBusy(true);
+    setError(null);
+    try {
+      done(await changeMyPin(pin));
+    } catch (err) {
+      setError(message(err, "Couldn't save your PIN."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const field = 'min-h-16 rounded-lg border-2 border-ink bg-surface-100 px-4 text-[20px] font-medium tracking-[0.3em] text-ink';
+  const digits = (v: string) => v.replace(/\D/g, '').slice(0, 8);
+  return (
+    <main className="mx-auto flex min-h-dvh w-full max-w-[560px] flex-col bg-surface-100 px-4 py-6 text-ink">
+      <form onSubmit={submit} aria-label="Choose your PIN" className="flex flex-1 flex-col gap-5">
+        <div className="flex flex-col gap-1">
+          <span className="t-label text-ink-muted">{config.operator_name} · Driver</span>
+          <h1 className="t-display m-0">Choose your PIN</h1>
+          <span className="t-driver-meta text-ink-muted">
+            Welcome, {name.split(' ')[0]}. You signed in with the starting PIN. Pick your own 4 to 8 digits; you&apos;ll use it from now on.
+          </span>
+        </div>
+        {error && (
+          <div role="alert" className="t-driver-meta rounded-lg border-2 border-status-failed bg-status-failed-bg p-4 font-bold">
+            {error}
+          </div>
+        )}
+        <label className="flex flex-col gap-2">
+          <span className="t-driver-action">New PIN</span>
+          <input type="password" inputMode="numeric" autoComplete="new-password" value={pin} onChange={(e) => setPin(digits(e.target.value))} className={field} />
+        </label>
+        <label className="flex flex-col gap-2">
+          <span className="t-driver-action">Type it again</span>
+          <input type="password" inputMode="numeric" autoComplete="new-password" value={again} onChange={(e) => setAgain(digits(e.target.value))} className={field} />
+          {mismatch && <span className="t-driver-meta font-bold text-attention">Doesn&apos;t match yet.</span>}
+        </label>
+        <div className="mt-auto flex flex-col gap-2">
+          <button type="submit" disabled={busy || pin.length < 4 || pin !== again} className={primaryCls} style={primaryStyle}>
+            {busy ? 'Saving…' : 'Save PIN and start'}
+          </button>
         </div>
       </form>
     </main>

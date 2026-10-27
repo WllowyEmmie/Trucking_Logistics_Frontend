@@ -19,13 +19,20 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Which app is calling. The console and the driver app have separate sign-in cookies, so one browser
+ * can be signed in to both; this header tells the API which one the call means.
+ */
+const appHeader = (): Record<string, string> =>
+  typeof window === 'undefined' ? {} : { 'X-App': window.location.pathname.startsWith('/driver') ? 'driver' : 'console' };
+
 /** Every call goes through this. A 409 is a state conflict: show `message` as-is and refetch. */
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {
       ...init,
-      headers: { 'Content-Type': 'application/json', ...init?.headers },
+      headers: { 'Content-Type': 'application/json', ...appHeader(), ...init?.headers },
     });
   } catch {
     // status 0 = network failure; the driver queue keeps these for retry.
@@ -44,6 +51,8 @@ export const post = <T>(path: string, body?: unknown) =>
   api<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
 
 export const patch = <T>(path: string, body: unknown) => api<T>(path, { method: 'PATCH', body: JSON.stringify(body) });
+
+export const del = <T = void>(path: string) => api<T>(path, { method: 'DELETE' });
 
 
 export const isConflict = (e: unknown): e is ApiError => e instanceof ApiError && e.status === 409;

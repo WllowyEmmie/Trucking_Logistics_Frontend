@@ -62,7 +62,7 @@ export function TruckEdit({ truck, drivers, usualTruckOf, onSaved, onClose }: Pr
 
   const id = `edit-${truck.id}`;
   return (
-    <form onSubmit={submit} noValidate aria-label={`Edit ${truck.plate_number}`} className="flex flex-col gap-3 bg-surface-200 px-4 py-3.5">
+    <form onSubmit={submit} noValidate aria-label={`Edit ${truck.plate_number}`} className="flex flex-col gap-3 px-4 py-3.5">
       <FormResult error={save.error} ok={null} title="Not saved" />
       <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
         <label className="flex flex-col gap-1.5">

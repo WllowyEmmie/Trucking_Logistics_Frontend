@@ -9,19 +9,26 @@ import { HoldToConfirm } from '@/components/driver/HoldToConfirm';
 import { ShiftCard } from '@/components/driver/ShiftCard';
 import { GivenTruck } from '@/components/driver/GivenTruck';
 import { StopList } from '@/components/driver/StopList';
-import { primaryCls, primaryStyle, secondaryCls, secondaryStyle, telHref } from '@/components/driver/ui';
+import { primaryCls, primaryStyle, rowCls, secondaryCls, secondaryStyle, telHref } from '@/components/driver/ui';
+import { useMyThread } from '@/lib/messages';
 
 const signOutCls = 't-driver-meta min-h-14 flex-none rounded-lg border-2 border-border bg-surface-100 px-3.5 font-bold text-ink';
 
 // Today: the stops of the current delivery, or the empty state.
 export default function DriverToday() {
   const { active, detail, stops, current, config, truckLabel, driverName, gps, time, start, loading, loadError, onShift, setShift } = useDriver();
+  const unread = useMyThread().data?.unread ?? 0;
   const callDispatch = (
-    config.dispatch_phone ? (
-      <a href={telHref(config.dispatch_phone)} role="button" className={secondaryCls} style={secondaryStyle}>
-        Call dispatch
-      </a>
-    ) : undefined
+    <div className="flex gap-2 [&>*]:flex-1">
+      <Link href="/driver/messages" role="button" className={secondaryCls} style={secondaryStyle}>
+        Messages{unread > 0 ? ` · ${unread} new` : ''}
+      </Link>
+      {config.dispatch_phone && (
+        <a href={telHref(config.dispatch_phone)} role="button" className={secondaryCls} style={secondaryStyle}>
+          Call dispatch
+        </a>
+      )}
+    </div>
   );
 
   if (!active) {
@@ -111,6 +118,10 @@ export default function DriverToday() {
         {!started && <p className="t-driver-meta m-0 text-ink-muted">Start when you leave for the first stop. Dispatch and the customers see the truck move from then.</p>}
       </div>
       <StopList stops={stops} current={started ? current : -1} config={config} pos={gps.pos} time={time} />
+      <Link href="/driver/messages" className={`${rowCls} ${unread ? 'border-ink' : 'border-border'}`} style={{ color: 'var(--ink)' }}>
+        Messages with dispatch
+        <span className="font-normal text-ink-muted">{unread ? `${unread} new` : 'Open'}</span>
+      </Link>
       <ShiftCard />
     </DriverScreen>
   );

@@ -42,11 +42,12 @@ export type WsMessage =
 /** Query keys per `changed` topic. */
 const TOPIC_KEYS: Record<string, readonly (readonly string[])[]> = {
   deliveries: [DELIVERIES_KEY, ['history']],
-  trucks: [TRUCKS_KEY],
+  trucks: [TRUCKS_KEY, ['truck-specs']],
   drivers: [DRIVERS_KEY],
   proposals: [['proposals']],
   config: [CONFIG_KEY],
   supervisor: [['supervisor']],
+  messages: [['messages']],
 };
 
 /** Several changes in a burst (assign = delivery + truck + proposal) become one refetch per key. */

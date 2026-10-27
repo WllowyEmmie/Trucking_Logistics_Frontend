@@ -1,5 +1,7 @@
 'use client';
 
+import { ConfirmHost } from '@/components/Confirm';
+
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { api, setUnauthorizedHandler } from '@/lib/api';
@@ -55,6 +57,7 @@ export function Providers({ children }: { children: ReactNode }) {
         <>
           <HealthBanner />
           {children}
+          <ConfirmHost />
         </>
       )}
     </QueryClientProvider>

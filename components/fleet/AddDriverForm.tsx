@@ -77,7 +77,6 @@ export function AddDriverForm({ trucks, onAdded }: Props) {
 
   return (
     <form onSubmit={submit} noValidate aria-label="Add a driver" className={formCls}>
-      <h2 className="t-h1 m-0">Add a driver</h2>
       <FormResult
         error={add.error ?? truckErr}
         ok={ok}
@@ -139,6 +138,7 @@ export function AddDriverForm({ trucks, onAdded }: Props) {
           <span className="t-h3">Generate an app PIN</span>
           <span className={hintCls()}>
             A random 6-digit PIN, shown once after adding, to text or WhatsApp to the driver. You can generate a new one any time.
+            {!genPin && ' Unticked: they sign in with 1234 the first time, and the app makes them choose their own.'}
           </span>
         </span>
       </label>

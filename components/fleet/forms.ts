@@ -44,9 +44,10 @@ export const fieldCls = (err?: boolean, mono?: boolean) =>
 export const hintCls = (err?: boolean) => `t-body-sm ${err ? 'font-semibold text-attention' : 'text-ink-muted'}`;
 
 export const radioCls = (on: boolean) =>
-  `min-h-11 rounded-full px-3.5 text-[14px] font-semibold ${
-    on ? 'border-2 border-ink bg-ink text-surface-100' : 'border border-border bg-surface-100 text-ink'
+  `min-h-11 rounded-[10px] px-3.5 text-[13.5px] font-medium ${
+    on ? 'border border-brand bg-brand text-brand-ink' : 'border border-border bg-surface-100 text-ink'
   }`;
 
-export const submitCls = 'min-h-12 rounded-md border-0 bg-ink text-[15px] font-bold text-surface-100 disabled:opacity-45';
-export const formCls = 'flex flex-col gap-4 rounded-lg border-2 border-ink bg-surface-100 p-5';
+export const submitCls = 'min-h-12 rounded-[14px] border-0 bg-ink text-[14px] font-medium text-surface-100 hover:opacity-90 disabled:opacity-45';
+// Inside the Fleet panel, which has its own title and edge.
+export const formCls = 'flex flex-col gap-4 bg-surface-100 p-4';

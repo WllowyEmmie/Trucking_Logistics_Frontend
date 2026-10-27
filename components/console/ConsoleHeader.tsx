@@ -5,8 +5,6 @@ import { useState } from 'react';
 import type { AppConfig } from '@/lib/config';
 import type { ExceptionRow } from '@/lib/exceptions';
 import { formatDuration } from '@/lib/format';
-import { AccountMenu } from '@/components/auth/AccountMenu';
-import { DispatchNav } from './DispatchNav';
 import { DismissedList, ExceptionTable } from './ExceptionTable';
 
 interface Props {
@@ -64,11 +62,10 @@ export function ConsoleHeader({ config, clock, exceptions, dismissed, stacked, o
   const n = exceptions.length;
 
   return (
-    <header className="flex-none border-b border-border bg-surface-100">
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-2.5">
+    <header className="flex-none border-b border-divider bg-surface-100">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-5 py-3">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <h1 className="t-h2 m-0">{config.operator_name} · Dispatch</h1>
-          <DispatchNav current="/console" />
+          <h1 className="m-0 text-[22px] font-semibold tracking-[-0.01em]">Deliveries</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -92,8 +89,6 @@ export function ConsoleHeader({ config, clock, exceptions, dismissed, stacked, o
             <ChevronDown size={16} strokeWidth={2.5} aria-hidden="true" style={{ transform: open ? 'rotate(180deg)' : 'none' }} />
           </button>
           <span className="t-mono ps-1 text-ink-muted">{clock}</span>
-          <span aria-hidden="true" className="mx-1 h-6 border-s border-divider" />
-          <AccountMenu />
         </div>
       </div>
 

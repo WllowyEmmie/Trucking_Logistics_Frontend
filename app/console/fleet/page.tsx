@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
-import { FleetView } from '@/components/fleet/FleetView';
+import { FleetMapView } from '@/components/fleet/FleetMapView';
 
 export const metadata: Metadata = { title: 'Fleet' };
 
 export default function FleetPage() {
-  return <FleetView />;
+  return <FleetMapView />;
 }

@@ -2,7 +2,9 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import type L from 'leaflet';
+import { Check, Crosshair, Layers, Minus, Plus, Sparkles, Truck as TruckIcon } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DispatchMap, type LatLng, type MapLink, type MapRoute, type MapStop, type MapTruck } from '@/components/map';
 import { api, isConflict, post } from '@/lib/api';
 import { useConfig } from '@/lib/config';
@@ -18,21 +20,24 @@ import {
   useDeliveryDetails,
   useDrivers,
 } from '@/lib/deliveries';
-import { activeByTruck, deriveExceptions, hasPosition, isStale, type ExceptionRow, type FailedInfo } from '@/lib/exceptions';
-import { formatDuration, formatTime, minutesSince, tzAbbr } from '@/lib/format';
+import { activeByTruck, hasPosition, isStale, type FailedInfo } from '@/lib/exceptions';
+import { formatDuration, formatTime, minutesSince } from '@/lib/format';
 import { STATUS_LABEL } from '@/lib/labels';
 import { TRUCKS_KEY, usePositions, usePositionsStatus } from '@/lib/positions';
 import type { CreateDeliveryResponse, DeliveryListItem, Proposal, Truck } from '@/lib/types';
-import { useAcks } from '@/lib/acks';
+import { useDark } from '@/lib/useDark';
 import { useElementWidth } from '@/lib/useElementWidth';
 import { useNow } from '@/lib/useNow';
-import { ConsoleHeader } from './ConsoleHeader';
+import { LoadCard } from './LoadCard';
 import { DELIVERY_FILTERS, DeliveryList, type AssignError, type DeliveryFilter } from './DeliveryList';
 import type { ReopenMode } from '@/lib/reopen';
 import { ProposalsPane, type ProposalError } from './ProposalsPane';
 import { useSupervisorActions } from '@/lib/supervisor';
 import { TruckList, type TruckFilter } from './TruckList';
 import { tabCls } from './ui';
+
+type Panel = 'layers' | 'trucks' | 'proposals' | null;
+type LayerKey = 'others' | 'idle' | 'callouts' | 'remaining';
 
 /** POST /deliveries/{id}/assign returns the delivery row; only these fields are used. */
 type AssignResponse = Pick<DeliveryListItem, 'id' | 'reference' | 'status' | 'truck_id'>;
@@ -48,7 +53,7 @@ const MAP_ANIMATE_POLL_S = 10;
 /** Failed deliveries older than this can't be in the exception window; their detail isn't fetched. */
 const FAILED_LOOKBACK_MS = 48 * 60 * 60_000;
 
-type Tab = 'deliveries' | 'map' | 'trucks' | 'proposals';
+type Tab = 'deliveries' | 'map';
 /** A truck highlighted from the assign panel, a proposal or an exception; `link` draws the dashed line to the pickup. */
 type Hover = { id: string; link: boolean } | null;
 interface AssignVars {
@@ -98,7 +103,12 @@ export function ConsoleView() {
   const [hover, setHover] = useState<Hover>(null);
   const [tFilter, setTFilter] = useState<TruckFilter>('all');
   const [tab, setTab] = useState<Tab>('deliveries');
-  const [propOpen, setPropOpen] = useState(false);
+  const [panel, setPanel] = useState<Panel>(null);
+  const [mapStyle, setMapStyle] = useState<'map' | 'sat'>('map');
+  const [layers, setLayers] = useState<Record<LayerKey, boolean>>({ others: true, idle: true, callouts: true, remaining: true });
+  const [lmap, setLmap] = useState<L.Map | null>(null);
+  const dark = useDark();
+  const accent = dark ? '#FFCF33' : '#2F7CF6';
   const [propNote, setPropNote] = useState<string | null>(null);
   // A refused approve or reject, kept where its card was until dismissed: a stale proposal is
   // expired by the server and leaves the pending list on the next refetch.
@@ -165,22 +175,8 @@ export function ConsoleView() {
   const flags = allProposals.filter((p) => p.kind === 'flag');
   const changes = allProposals.filter((p) => p.kind === 'change');
 
-  const allExceptions = deriveExceptions(deliveries, trucks, driverName, failed, flags, config, now);
-  // Dismissed ones leave the count, the table and the rows' red flag; they can be shown and restored.
-  const acks = useAcks();
-  const exceptions = allExceptions.filter((x) => !acks.has(x.key));
-  const dismissed = allExceptions.filter((x) => acks.has(x.key));
-  const attentionIds = new Set(exceptions.flatMap((x) => (x.deliveryId ? [x.deliveryId] : [])));
-  function dismissException(x: ExceptionRow) {
-    acks.ack(x.key);
-    // An agent flag is the agent's to raise and everyone's to see: dismissing it rejects it on
-    // the server, so it leaves every dispatcher's list, not just this browser's.
-    if (x.agent && x.key.startsWith('agent-')) {
-      void post(`/proposals/${encodeURIComponent(x.key.slice('agent-'.length))}/reject`)
-        .catch(() => undefined)
-        .finally(() => void qc.invalidateQueries({ queryKey: PROPOSALS_KEY }));
-    }
-  }
+  // Needs attention lives on the Notifications page now; the list carries no red flags.
+  const attentionIds = useMemo(() => new Set<string>(), []);
 
   const selD = sel ? (deliveries.find((d) => d.id === sel) ?? null) : null;
   const selDetail = selQ.data;
@@ -297,12 +293,6 @@ export function ConsoleView() {
     setExp(null);
     setHover(null);
   }
-  function onException(x: ExceptionRow) {
-    setParams({ d: x.deliveryId, t: null, f: 'all' });
-    setExp(x.deliveryId);
-    setHover(x.truckId ? { id: x.truckId, link: false } : null);
-    setTab('deliveries');
-  }
   function onCreated(r: CreateDeliveryResponse) {
     const d = r.delivery;
     const item: DeliveryListItem = { id: d.id, reference: d.reference, status: d.status, customer_name: d.customer_name, truck_id: null, created_at: d.created_at, due_by: null, eta: null, finished_at: null };
@@ -314,6 +304,24 @@ export function ConsoleView() {
     setNote(d.id, `Created ${d.reference}. Assign a truck below, or leave it pending.`);
   }
 
+  // ---- The Copilot's focus_map / open_panel: it names a delivery by reference, a truck by plate ----
+  useEffect(() => {
+    const on = (e: Event) => {
+      const ui = (e as CustomEvent<{ kind?: string; target?: string }>).detail ?? {};
+      const target = String(ui.target ?? '').trim().toLowerCase();
+      if (!target) return;
+      if (ui.kind === 'delivery') {
+        const d = deliveries.find((x) => x.reference.toLowerCase() === target || x.id === target);
+        if (d) selectDelivery(d.id);
+      } else if (ui.kind === 'truck') {
+        const t = trucks.find((x) => x.plate_number.toLowerCase() === target || x.id === target);
+        if (t && truckSel !== t.id) toggleTruck(t.id);
+      }
+    };
+    window.addEventListener('copilot-ui', on);
+    return () => window.removeEventListener('copilot-ui', on);
+  });
+
   // ---- Proposals ----
   function showProposal(p: Proposal) {
     const d = p.action?.delivery_id ?? p.delivery_id;
@@ -324,11 +332,8 @@ export function ConsoleView() {
     }
     setHover(t ? { id: t, link: true } : null);
     if (narrow) setTab('map');
+    setPanel(null);
   }
-
-  // ---- Header ----
-  const nowD = new Date(now);
-  const clock = `${formatTime(nowD, tz, config.locale)} ${tzAbbr(tz, nowD, config.locale)}`;
 
   // ---- Map ----
   const map = useMemo(() => {
@@ -367,7 +372,7 @@ export function ConsoleView() {
       const t = selD.truck_id ? T.get(selD.truck_id) : undefined;
       const tPos = t && hasPosition(t) ? pos(t) : null;
       const sStops = (selDetail?.stops ?? []).filter(hasLatLng);
-      stops = sStops.map((s) => ({ id: s.id, n: s.sequence, kind: s.stop_type, lat: s.lat, lng: s.lng, done: stopDone(s) }));
+      stops = sStops.map((s) => ({ id: s.id, n: s.sequence, kind: s.stop_type, lat: s.lat, lng: s.lng, done: stopDone(s), address: s.address }));
       const pts = sStops.map(pos);
       if (selD.status === 'in_transit' && tPos) {
         route = { travelled: [...sStops.filter(stopDone).map(pos), tPos], remaining: [tPos, ...sStops.filter((s) => !stopDone(s)).map(pos)] };
@@ -393,189 +398,295 @@ export function ConsoleView() {
     return { trucks: mTrucks, stops, route, links, note, fitKey, fitPoints };
   }, [selD, selDetail, truckSel, hover, trucks, T, config, now, driverName]);
 
-  // ---- Layout ----
+  // The Layers menu: other trucks on a delivery, free ones, the callouts, the road still to go.
+  const shownTrucks = map.trucks.filter((t) => t.selected || (t.state === 'idle' ? layers.idle : layers.others));
+  const shownRoute = map.route && !layers.remaining ? { ...map.route, remaining: [] } : map.route;
+  const recenter = () => {
+    if (!lmap) return;
+    const p = map.fitPoints;
+    if (p.length === 1) lmap.setView([p[0]!.lat, p[0]!.lng], Math.max(lmap.getZoom(), 12));
+    else if (p.length > 1) {
+      const wide = lmap.getSize().x > 700;
+      lmap.fitBounds(
+        p.map((x) => [x.lat, x.lng] as [number, number]),
+        wide ? { paddingTopLeft: [340, 90], paddingBottomRight: [90, 80], maxZoom: 14 } : { padding: [56, 56], maxZoom: 14 },
+      );
+    }
+  };
+
+  // ---- Layout: the Loads design. The list on the left, the map filling the rest with the load
+  // card, the map controls and the trucks / proposals panels floating over it. ----
   const show = (k: Tab) => !narrow || tab === k;
-  const tabs: [Tab, string][] = [
-    ['deliveries', 'Deliveries'],
-    ['map', 'Map'],
-    ['trucks', 'Trucks'],
-  ];
-  if (config.agent_enabled) tabs.push(['proposals', 'Proposals']);
-  const propIsOpen = narrow || propOpen;
+  const selPlate = selD?.truck_id ? (T.get(selD.truck_id)?.plate_number ?? null) : null;
+  const selDriver = selD?.truck_id ? driverName(T.get(selD.truck_id)?.driver_id ?? null) : null;
+  const floatBox = 'rounded-xl border border-divider bg-surface-100 text-ink';
+  const shadow = { boxShadow: 'var(--shadow-card)' };
+  const segBtn = (on: boolean) => ({
+    background: on ? 'var(--brand)' : 'transparent',
+    color: on ? 'var(--brand-ink)' : 'var(--ink)',
+    minHeight: 32,
+    minWidth: 0,
+  });
+  const ctl = 'grid h-[38px] w-[38px] place-items-center border-0 bg-transparent text-ink';
   const lastCheck = proposalsQ.dataUpdatedAt
     ? `Last checked ${formatTime(new Date(proposalsQ.dataUpdatedAt), tz, config.locale)} · ${deliveries.length} deliveries, ${trucks.length} trucks`
     : 'Not checked yet';
+  const layerOpts: [LayerKey, string, number | null][] = [
+    ['others', 'Trucks on a delivery', map.trucks.filter((t) => t.state !== 'idle' && !t.selected).length],
+    ['idle', 'Free trucks', map.trucks.filter((t) => t.state === 'idle').length],
+    ['callouts', 'Pickup & drop-off labels', null],
+    ['remaining', 'Route still to go', null],
+  ];
 
   return (
-    <div
-      ref={rootRef}
-      className="flex flex-col bg-surface-200 text-ink"
-      style={narrow ? { minHeight: '100dvh' } : { height: '100dvh', overflow: 'hidden' }}
-    >
-      <ConsoleHeader
-        config={config}
-        clock={clock}
-        exceptions={exceptions}
-        dismissed={dismissed}
-        onDismiss={dismissException}
-        onRestore={(x) => acks.restore(x.key)}
-        stacked={narrow}
-        onView={onException}
-      />
-
+    <div ref={rootRef} className="flex bg-surface-100 text-ink" style={narrow ? { minHeight: '100%', flexDirection: 'column' } : { height: '100%', overflow: 'hidden' }}>
       {narrow && (
-        <div role="tablist" aria-label="Panes" className="flex flex-wrap gap-2 border-b border-border bg-surface-100 px-3 py-2">
-          {tabs.map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              role="tab"
-              id={`tab-${k}`}
-              aria-selected={tab === k}
-              aria-controls={`pane-${k}`}
-              onClick={() => setTab(k)}
-              className={tabCls(tab === k)}
-            >
+        <div role="tablist" aria-label="Panes" className="flex gap-1 px-3 pt-3">
+          {(
+            [
+              ['deliveries', 'Deliveries'],
+              ['map', 'Map'],
+            ] as const
+          ).map(([k, label]) => (
+            <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={tabCls(tab === k)}>
               {label}
             </button>
           ))}
         </div>
       )}
 
-      <div className="flex min-h-0" style={{ flex: narrow ? '0 0 auto' : '1 1 auto', flexDirection: narrow ? 'column' : 'row' }}>
-        <section
-          id="pane-deliveries"
-          aria-label="Deliveries"
-          role={narrow ? 'tabpanel' : undefined}
-          className="min-h-0 min-w-0 flex-col border-e border-border bg-surface-100"
-          // Wider while the new-delivery form is open: the map gives up the room.
-          style={{ display: show('deliveries') ? 'flex' : 'none', flex: narrow ? '1 1 auto' : creating ? '0 0 560px' : '0 0 400px' }}
-        >
-          <DeliveryList
-            deliveries={deliveries}
-            trucks={trucks}
-            driverName={driverName}
-            detailOf={detailOf}
-            failed={failed}
-            config={config}
-            now={now}
-            loading={deliveriesQ.isPending}
-            error={deliveriesQ.isError && !deliveriesQ.data ? deliveriesQ.error : null}
-            onRetryLoad={() => void deliveriesQ.refetch()}
-            attentionIds={attentionIds}
-            filter={filter}
-            truckSel={truckSel}
-            sel={sel}
-            exp={exp}
-            hover={hover?.id ?? null}
-            notes={notes}
-            errors={errors}
-            assigningId={pendingVars?.deliveryId ?? null}
-            creating={creating}
-            onFilter={(f) => setParams({ f })}
-            onClearTruck={() => setParams({ t: null })}
-            onClearAll={() => setParams({ f: 'all', t: null })}
-            onSelect={(id) => {
-              setParams({ d: sel === id ? null : id });
-              setHover(null);
-            }}
-            onToggle={(id) => {
-              setExp(exp === id ? null : id);
-              setParams({ d: id });
-            }}
-            onHover={(id) => setHover(id ? { id, link: true } : null)}
-            onAssign={doAssign}
-            onReopen={doReopen}
-            onCancel={(id) => cancel.mutate(id)}
-            cancellingId={cancel.isPending ? (cancel.variables ?? null) : null}
-            cancelErrors={cancelErrors}
-            onCreating={(open) => {
-              setCreating(open);
-              if (open) setTab('deliveries');
-            }}
-            onCreated={onCreated}
-          />
-        </section>
+      <section
+        id="pane-deliveries"
+        aria-label="Deliveries"
+        className="min-h-0 min-w-0 flex-col"
+        style={{ display: show('deliveries') ? 'flex' : 'none', flex: narrow ? '1 1 auto' : creating ? '0 0 560px' : '0 0 380px' }}
+      >
+        <DeliveryList
+          deliveries={deliveries}
+          trucks={trucks}
+          driverName={driverName}
+          detailOf={detailOf}
+          failed={failed}
+          config={config}
+          now={now}
+          loading={deliveriesQ.isPending}
+          error={deliveriesQ.isError && !deliveriesQ.data ? deliveriesQ.error : null}
+          onRetryLoad={() => void deliveriesQ.refetch()}
+          attentionIds={attentionIds}
+          filter={filter}
+          truckSel={truckSel}
+          sel={sel}
+          exp={exp}
+          hover={hover?.id ?? null}
+          notes={notes}
+          errors={errors}
+          assigningId={pendingVars?.deliveryId ?? null}
+          creating={creating}
+          onFilter={(f) => setParams({ f })}
+          onClearTruck={() => setParams({ t: null })}
+          onClearAll={() => setParams({ f: 'all', t: null })}
+          onSelect={(id) => {
+            setParams({ d: sel === id ? null : id });
+            setHover(null);
+            if (narrow && sel !== id) setTab('map');
+          }}
+          onToggle={(id) => {
+            setExp(exp === id ? null : id);
+            setParams({ d: id });
+          }}
+          onHover={(id) => setHover(id ? { id, link: true } : null)}
+          onAssign={doAssign}
+          onReopen={doReopen}
+          onCancel={(id) => cancel.mutate(id)}
+          cancellingId={cancel.isPending ? (cancel.variables ?? null) : null}
+          cancelErrors={cancelErrors}
+          onCreating={(open) => {
+            setCreating(open);
+            if (open) setTab('deliveries');
+          }}
+          onCreated={onCreated}
+        />
+      </section>
 
-        <section
-          id="pane-map"
-          aria-label="Map"
-          role={narrow ? 'tabpanel' : undefined}
-          className="relative min-w-[280px] flex-auto"
-          style={{ display: show('map') ? 'block' : 'none', height: narrow ? 420 : 'auto' }}
-        >
+      <section
+        id="pane-map"
+        aria-label="Map"
+        className="relative min-w-[280px] flex-auto p-3 sm:ps-0"
+        style={{ display: show('map') ? 'block' : 'none', height: narrow ? 560 : 'auto' }}
+      >
+        <div className="relative h-full w-full overflow-hidden rounded-[18px] border border-divider">
           <DispatchMap
+            variant="console"
+            tiles={mapStyle === 'sat' ? 'satellite' : dark ? 'dark' : 'street'}
+            dark={dark && mapStyle !== 'sat'}
+            accent={accent}
+            callouts={layers.callouts}
+            fitPadding={{ tl: [340, 90], br: [90, 80] }}
+            onMap={setLmap}
             center={config.center}
             zoom={config.default_zoom}
-            trucks={map.trucks}
+            trucks={shownTrucks}
             stops={map.stops}
-            route={map.route}
+            route={shownRoute}
             links={map.links}
-            note={map.note}
-            alert={
-              posStatus === 'down'
-                ? `Positions aren't live · reconnecting${trucksQ.dataUpdatedAt ? ` · last update ${formatTime(new Date(trucksQ.dataUpdatedAt), tz, config.locale)}` : ''}`
-                : null
-            }
             dim={posStatus === 'down'}
-            controls
-            legend
             staleMinutes={config.stale_minutes}
             animateSeconds={posStatus === 'live' ? MAP_ANIMATE_LIVE_S : MAP_ANIMATE_POLL_S}
             onTruck={toggleTruck}
             fitKey={map.fitKey}
             fitPoints={map.fitPoints}
             ariaLabel="Fleet map"
-          />
-        </section>
-
-        <section
-          id="pane-trucks"
-          aria-label="Trucks"
-          role={narrow ? 'tabpanel' : undefined}
-          className="min-h-0 min-w-0 flex-col border-s border-border bg-surface-100"
-          style={{ display: show('trucks') ? 'flex' : 'none', flex: narrow ? '1 1 auto' : '0 0 300px' }}
-        >
-          <TruckList
-            trucks={trucks}
-            config={config}
-            driverName={driverName}
-            deliveryOf={(id) => onTruck.get(id)}
-            filter={tFilter}
-            onFilter={setTFilter}
-            isSelected={(t) => truckSel === t.id || selD?.truck_id === t.id}
-            onSelect={toggleTruck}
-          />
-        </section>
-
-        {config.agent_enabled && (
-          <aside
-            id="pane-proposals"
-            aria-label="Agent proposals"
-            role={narrow ? 'tabpanel' : undefined}
-            className="min-h-0 min-w-0 flex-col border-s border-border bg-surface-100"
-            style={{ display: show('proposals') ? 'flex' : 'none', flex: narrow ? '1 1 auto' : propIsOpen ? '0 0 340px' : '0 0 56px' }}
           >
-            <ProposalsPane
-              proposals={changes}
-              open={propIsOpen}
-              collapsible={!narrow}
-              note={propNote}
-              lastCheck={lastCheck}
-              errors={propErrors}
-              busy={deciding ? { id: deciding.p.id, verb: deciding.verb } : null}
-              config={config}
-              onToggle={() => setPropOpen((o) => !o)}
-              onShow={showProposal}
-              onApprove={(p) => decide.mutate({ p, verb: 'approve' })}
-              onReject={(p) => decide.mutate({ p, verb: 'reject' })}
-              onDismiss={(id) => setPropErrors(({ [id]: _gone, ...rest }) => rest)}
-              done={doneQ.data}
-              onShowDelivery={selectDelivery}
-            />
-          </aside>
-        )}
-      </div>
+            {selD && (
+              <LoadCard
+                key={selD.id}
+                d={selD}
+                detail={selDetail}
+                plate={selPlate}
+                driver={selDriver}
+                config={config}
+                now={now}
+                accent={accent}
+                onClose={() => setParams({ d: null })}
+              />
+            )}
+            {!selD && map.note && (
+              <div className={`absolute start-3.5 top-3.5 z-[1000] px-3 py-2 text-[13px] font-semibold ${floatBox}`} style={shadow}>
+                {map.note}
+              </div>
+            )}
+
+            {/* Top right: map style, layers, trucks, proposals. */}
+            <div className="pointer-events-none absolute start-3.5 end-3.5 top-3.5 z-[1000] flex flex-wrap justify-end gap-2">
+              <div className={`pointer-events-auto flex gap-0.5 p-1 ${floatBox}`} style={shadow}>
+                {(
+                  [
+                    ['map', 'Map'],
+                    ['sat', 'Satellite'],
+                  ] as const
+                ).map(([k, label]) => (
+                  <button key={k} type="button" aria-pressed={mapStyle === k} onClick={() => setMapStyle(k)} className="rounded-[9px] border-0 px-3.5 text-[12.5px] font-medium" style={segBtn(mapStyle === k)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {(
+                [
+                  ['layers', 'Layers', Layers, null],
+                  ['trucks', 'Trucks', TruckIcon, trucks.length],
+                  ...(config.agent_enabled ? ([['proposals', 'Proposals', Sparkles, changes.length]] as const) : []),
+                ] as const
+              ).map(([k, label, Icon, n]) => (
+                <button
+                  key={k}
+                  type="button"
+                  aria-expanded={panel === k}
+                  onClick={() => setPanel(panel === k ? null : k)}
+                  className={`pointer-events-auto flex h-10 items-center gap-1.5 px-3.5 text-[12.5px] font-medium ${floatBox}`}
+                  style={{ ...shadow, borderColor: panel === k ? 'var(--ink)' : undefined, minHeight: 40 }}
+                >
+                  <Icon size={15} strokeWidth={1.6} aria-hidden="true" />
+                  {label}
+                  {n !== null && n > 0 && (
+                    <span
+                      className="rounded-md px-1.5 text-[10.5px]"
+                      style={k === 'proposals' ? { background: 'var(--agent)', color: '#fff' } : { background: 'var(--surface-200)' }}
+                    >
+                      {n}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {panel === 'layers' && (
+              <div className={`absolute end-3.5 top-[62px] z-[1100] flex w-[240px] flex-col gap-1 p-3.5 ${floatBox}`} style={shadow}>
+                <span className="mb-1 text-[12px] font-semibold">Show on map</span>
+                {layerOpts.map(([k, label, n]) => {
+                  const on = layers[k];
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => setLayers((l) => ({ ...l, [k]: !l[k] }))}
+                      className="flex items-center gap-2.5 border-0 bg-transparent px-1 text-start text-[12.5px] text-ink"
+                      style={{ minHeight: 34 }}
+                    >
+                      <span
+                        className="grid h-[18px] w-[18px] flex-none place-items-center rounded-[5px] border-[1.5px]"
+                        style={{ background: on ? 'var(--brand)' : 'transparent', borderColor: on ? 'var(--brand)' : 'var(--border)', color: 'var(--brand-ink)' }}
+                      >
+                        {on && <Check size={11} strokeWidth={3} aria-hidden="true" />}
+                      </span>
+                      <span className="flex-1">{label}</span>
+                      {n !== null && <span className="text-[11px] text-ink-muted">{n}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {panel === 'trucks' && (
+              <div className={`absolute end-3.5 top-[62px] bottom-[180px] z-[1100] flex w-[320px] max-w-[calc(100%-28px)] flex-col overflow-hidden ${floatBox}`} style={shadow}>
+                <TruckList
+                  trucks={trucks}
+                  config={config}
+                  driverName={driverName}
+                  deliveryOf={(id) => onTruck.get(id)}
+                  filter={tFilter}
+                  onFilter={setTFilter}
+                  isSelected={(t) => truckSel === t.id || selD?.truck_id === t.id}
+                  onSelect={toggleTruck}
+                />
+              </div>
+            )}
+            {panel === 'proposals' && config.agent_enabled && (
+              <div className={`absolute end-3.5 top-[62px] bottom-[180px] z-[1100] flex w-[340px] max-w-[calc(100%-28px)] flex-col overflow-hidden ${floatBox}`} style={shadow}>
+                <ProposalsPane
+                  proposals={changes}
+                  open
+                  collapsible={false}
+                  note={propNote}
+                  lastCheck={lastCheck}
+                  errors={propErrors}
+                  busy={deciding ? { id: deciding.p.id, verb: deciding.verb } : null}
+                  config={config}
+                  onToggle={() => setPanel(null)}
+                  onShow={showProposal}
+                  onApprove={(p) => decide.mutate({ p, verb: 'approve' })}
+                  onReject={(p) => decide.mutate({ p, verb: 'reject' })}
+                  onDismiss={(id) => setPropErrors(({ [id]: _gone, ...rest }) => rest)}
+                  done={doneQ.data}
+                  onShowDelivery={selectDelivery}
+                />
+              </div>
+            )}
+
+            {posStatus === 'down' && (
+              <div role="status" className={`absolute start-3.5 bottom-3.5 z-[1000] px-3 py-2 text-[12.5px] font-semibold ${floatBox}`} style={{ ...shadow, borderColor: 'var(--attention)' }}>
+                Positions aren&apos;t live · reconnecting
+                {trucksQ.dataUpdatedAt ? ` · last update ${formatTime(new Date(trucksQ.dataUpdatedAt), tz, config.locale)}` : ''}
+              </div>
+            )}
+
+            {/* Bottom right: recentre and zoom. */}
+            <div className="absolute end-3.5 bottom-[84px] z-[1000] flex flex-col gap-2">
+              <button type="button" aria-label="Recentre" onClick={recenter} className={`${ctl} rounded-[11px] bg-surface-100`} style={{ ...shadow, minHeight: 38, minWidth: 38 }}>
+                <Crosshair size={17} strokeWidth={1.6} aria-hidden="true" />
+              </button>
+              <div className="flex flex-col overflow-hidden rounded-[11px] bg-surface-100" style={shadow}>
+                <button type="button" aria-label="Zoom in" onClick={() => lmap?.zoomIn()} className={`${ctl} border-b border-divider`} style={{ minHeight: 38, minWidth: 38 }}>
+                  <Plus size={16} strokeWidth={1.7} aria-hidden="true" />
+                </button>
+                <button type="button" aria-label="Zoom out" onClick={() => lmap?.zoomOut()} className={ctl} style={{ minHeight: 38, minWidth: 38 }}>
+                  <Minus size={16} strokeWidth={1.7} aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          </DispatchMap>
+        </div>
+      </section>
     </div>
   );
+
 }

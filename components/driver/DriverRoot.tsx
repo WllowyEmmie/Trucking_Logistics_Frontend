@@ -13,6 +13,14 @@ export function DriverRoot({ children }: { children: ReactNode }) {
     // In mock mode MSW's worker must control the page; a second worker on /driver would take
     // over and the mock API would stop answering. So the app shell is only cached against a real API.
     if (MOCKING) return;
+    // In dev, Next's chunk names don't change when the code does, so the worker's cache-first copy
+    // would keep running old code. Only production builds (hashed names) get it; in dev, take away
+    // any worker and cache left from before.
+    if (process.env.NODE_ENV !== 'production') {
+      void navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.active?.scriptURL.endsWith('/driver-sw.js') && void r.unregister()));
+      void caches?.keys().then((keys) => keys.filter((k) => k.startsWith('driver-shell-')).forEach((k) => void caches.delete(k)));
+      return;
+    }
     navigator.serviceWorker
       .register('/driver-sw.js', { scope: '/driver' })
       .then(() => navigator.serviceWorker.ready)

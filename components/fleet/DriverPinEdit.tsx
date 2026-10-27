@@ -44,7 +44,7 @@ export function DriverPinEdit({ driver, onSaved, onClose }: { driver: Driver; on
 
   if (issued) {
     return (
-      <div className="bg-surface-200 px-4 py-3.5">
+      <div className="px-4 py-3.5">
         <PinReveal pin={issued} name={driver.name} phone={driver.phone} onDone={onClose} />
       </div>
     );
@@ -52,7 +52,7 @@ export function DriverPinEdit({ driver, onSaved, onClose }: { driver: Driver; on
 
   const id = `pin-${driver.id}`;
   return (
-    <div className="flex flex-col gap-3 bg-surface-200 px-4 py-3.5">
+    <div className="flex flex-col gap-3 px-4 py-3.5">
       <FormResult error={generate.error ?? save.error} ok={null} title="PIN not set" />
       <div className="flex flex-col gap-1.5">
         <span className="t-h3">{driver.has_pin ? 'New app PIN' : 'App PIN'}</span>

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ChevronDown, TriangleAlert } from 'lucide-react';
+import { ChevronDown, Package, TriangleAlert, Truck as TruckIcon } from 'lucide-react';
 import { useState } from 'react';
 import { StatusPill } from '@/components/StatusPill';
 import type { AppConfig } from '@/lib/config';
@@ -73,55 +73,92 @@ export function DeliveryRow(p: Props) {
   const etaAt = new Map((detail?.eta?.stops ?? []).map((x) => [x.stop_id, x.at]));
   const link = detail ? `${typeof window !== 'undefined' ? window.location.origin : ''}/t/${detail.delivery.tracking_token}` : null;
 
+  // How far along: stops done of all stops once the detail is in; before that, from the status.
+  const progress = stops.length
+    ? stops.filter((x) => x.status === 'completed' || x.status === 'skipped').length / stops.length
+    : d.status === 'completed'
+      ? 1
+      : d.status === 'in_transit'
+        ? 0.5
+        : 0;
+  const ended = d.status === 'completed';
+
   return (
     <li
       data-id={d.id}
-      className="border-b border-divider"
-      style={{ background: p.selected ? 'var(--accent-bg)' : 'transparent', boxShadow: p.selected ? 'inset 0 0 0 2px var(--accent)' : 'none' }}
+      className="flex flex-none flex-col rounded-[18px] border transition-shadow"
+      style={{
+        borderColor: p.selected ? 'var(--ink)' : 'var(--divider)',
+        background: p.selected ? 'var(--surface-100)' : 'var(--surface-200)',
+        boxShadow: p.selected ? 'var(--shadow-card)' : 'none',
+      }}
     >
-      <div className="flex items-center gap-2 pe-2.5">
+      <div className="flex items-start gap-1 pe-2">
         <button
           type="button"
           onClick={p.onSelect}
           aria-pressed={p.selected}
-          className="flex min-w-0 flex-1 flex-col gap-1 border-0 bg-transparent px-3 py-2.5 text-start text-ink"
+          className="flex min-w-0 flex-1 flex-col gap-3 border-0 bg-transparent p-3.5 text-start text-ink"
         >
-          {/* Reference and customer read as one line; the status tag gets the next line to itself, so
-              every row has the same shape whatever the name's length. */}
-          <span className="t-h3 wrap-anywhere">
-            <span className="t-mono me-2 font-semibold">{d.reference}</span>
-            {d.customer_name}
-          </span>
-          <span className="flex">
+          <span className="flex items-center gap-2.5">
+            <span aria-hidden="true" className="grid h-9 w-9 flex-none place-items-center rounded-[11px] border border-border bg-surface-100">
+              <Package size={16} strokeWidth={1.8} />
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col leading-tight">
+              <span className="t-mono text-[15px] font-medium">{d.reference}</span>
+              <span className="wrap-anywhere text-[12.5px] text-ink-muted">{d.customer_name}</span>
+            </span>
             <StatusPill status={d.status} size="sm" />
           </span>
-          <span className="t-body-sm text-ink-muted">{p.line2}</span>
-          {p.due && (
-            <span className={`t-body-sm ${p.dueState === 'late' || p.dueState === 'at_risk' ? 'font-bold text-attention' : 'text-ink-muted'}`}>
-              {p.dueState === 'late' ? 'Late · ' : p.dueState === 'at_risk' ? 'At risk · ' : ''}
-              {p.due}
-            </span>
-          )}
-          {p.flag && (
-            <span className="t-body-sm flex items-center gap-1.5 font-bold text-attention">
-              <TriangleAlert size={14} strokeWidth={2.75} aria-hidden="true" />
-              {p.flag}
-            </span>
-          )}
+
+          {/* The route bar from the design: a dashed road, the done part solid, the truck where it is. */}
+          <span aria-hidden="true" className="relative flex h-4 items-center">
+            <i className="absolute start-0 h-2 w-2 rounded-full bg-ink" />
+            <i className="absolute start-1 end-1 border-t-[1.5px] border-dashed border-border" />
+            <i className="absolute start-1 h-0.5 bg-ink" style={{ width: `calc(${progress} * (100% - 8px))` }} />
+            <i
+              className="absolute end-0 h-[9px] w-[9px] rounded-full border-[1.5px]"
+              style={{ background: ended ? 'var(--ink)' : 'var(--surface-100)', borderColor: ended ? 'var(--ink)' : 'var(--border)' }}
+            />
+            {(d.status === 'in_transit' || d.status === 'assigned') && (
+              <span
+                className="absolute -top-px grid h-[18px] w-[22px] place-items-center"
+                style={{ insetInlineStart: `calc(${progress} * (100% - 22px))`, background: p.selected ? 'var(--surface-100)' : 'var(--surface-200)' }}
+              >
+                <TruckIcon size={16} fill="currentColor" strokeWidth={1.2} />
+              </span>
+            )}
+          </span>
+
+          <span className="flex flex-col gap-0.5">
+            <span className="t-body-sm text-ink-muted">{p.line2}</span>
+            {p.due && (
+              <span className={`t-body-sm ${p.dueState === 'late' || p.dueState === 'at_risk' ? 'font-bold text-attention' : 'text-ink-muted'}`}>
+                {p.dueState === 'late' ? 'Late · ' : p.dueState === 'at_risk' ? 'At risk · ' : ''}
+                {p.due}
+              </span>
+            )}
+            {p.flag && (
+              <span className="t-body-sm flex items-center gap-1.5 font-bold text-attention">
+                <TriangleAlert size={14} strokeWidth={2.75} aria-hidden="true" />
+                {p.flag}
+              </span>
+            )}
+          </span>
         </button>
         <button
           type="button"
           onClick={p.onToggle}
           aria-expanded={p.expanded}
           aria-label={`${p.expanded ? 'Hide' : 'Show'} timeline for ${d.reference}`}
-          className="flex h-11 w-11 flex-none items-center justify-center rounded-md border border-border bg-surface-100 text-ink"
+          className="mt-3 flex h-11 w-11 flex-none items-center justify-center rounded-[10px] border border-border bg-surface-100 text-ink hover:border-ink-subtle"
         >
           <ChevronDown size={18} strokeWidth={2.5} aria-hidden="true" style={{ transform: p.expanded ? 'rotate(180deg)' : 'none' }} />
         </button>
       </div>
 
       {p.expanded && (
-        <div className="flex flex-col gap-4 px-3 pt-0.5 pb-4">
+        <div className="flex flex-col gap-4 border-t border-divider px-3.5 pt-3.5 pb-4">
           {!detail && (
             <span role="status" className="t-body-sm text-ink-muted">
               Loading stops and events…

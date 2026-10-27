@@ -109,6 +109,8 @@ export function eventText(e: DeliveryEvent, stops?: Stop[]): string {
       return `Signed for at ${stopLabel(e, stops)}${e.note ? ` · ${e.note}` : ''}`;
     case 'due_changed':
       return e.note ? `Due time set to ${dueNote(e.note)}` : 'Due time cleared';
+    case 'edited':
+      return e.note ? `Edited · ${e.note}` : 'Edited';
     case 'reopened':
       return 'Sent out again' + (e.note ? ` · ${e.note.replace(/^back to pending by /, 'by ')}` : '');
     default:

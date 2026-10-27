@@ -2,20 +2,20 @@
 
 import Link from 'next/link';
 
-import { useEffect, useRef } from 'react';
+import { Plus, Search } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import type { AppConfig } from '@/lib/config';
 import { hasLatLng } from '@/lib/deliveries';
 import { hasPosition, isActive, isStale, type FailedInfo } from '@/lib/exceptions';
 import { formatDuration, formatTime, haversineKm, minutesSince } from '@/lib/format';
 import { failReasonLabel } from '@/lib/labels';
 import type { CreateDeliveryResponse, DeliveryDetailResponse, DeliveryListItem, DeliveryStatus, Truck } from '@/lib/types';
-import { AskBox } from './AskBox';
 import type { Candidate } from './AssignPanel';
 import { DeliveryRow, type RowError } from './DeliveryRow';
-import { dueLine, dueState } from '@/lib/due';
+import { dueLine } from '@/lib/due';
 import type { ReopenMode } from '@/lib/reopen';
 import { NewDeliveryForm } from './NewDeliveryForm';
-import { btnPrimary, btnSecondary, chipCls } from './ui';
+import { btnPrimary, btnSecondary } from './ui';
 
 /** Trucks offered in the assign panel: room for every available truck in a small fleet. */
 const MAX_CANDIDATES = 8;
@@ -25,7 +25,6 @@ export type DeliveryFilter = 'all' | 'active' | 'attention' | DeliveryStatus;
 // Every list filter lives here, above the list it changes. The header counts only show numbers.
 const CHIPS: [DeliveryFilter, string][] = [
   ['all', 'All'],
-  ['attention', 'Needs attention'],
   ['pending', 'Pending'],
   ['assigned', 'Assigned'],
   ['in_transit', 'In transit'],
@@ -102,7 +101,16 @@ export function DeliveryList(p: Props) {
     .sort((a, b) => (b.last_seen_at ? Date.parse(b.last_seen_at) : 0) - (a.last_seen_at ? Date.parse(a.last_seen_at) : 0));
 
   const byTruck = deliveries.filter((d) => !p.truckSel || d.truck_id === p.truckSel);
-  let list = byTruck;
+  const [q, setQ] = useState('');
+  const needle = q.trim().toLowerCase();
+  let list = needle
+    ? byTruck.filter((d) =>
+        [d.reference, d.customer_name, d.truck_id ? (T.get(d.truck_id)?.plate_number ?? '') : '', d.truck_id ? (p.driverName(T.get(d.truck_id)?.driver_id ?? null) ?? '') : '']
+          .join(' ')
+          .toLowerCase()
+          .includes(needle),
+      )
+    : byTruck;
   if (p.filter === 'active') list = list.filter(isActive);
   else if (p.filter === 'attention') list = list.filter((d) => p.attentionIds.has(d.id));
   else if (p.filter !== 'all') list = list.filter((d) => d.status === p.filter);
@@ -176,39 +184,62 @@ export function DeliveryList(p: Props) {
 
   return (
     <>
-      {config.agent_enabled && <AskBox />}
-      <div className="flex items-center justify-between gap-2 px-3 pt-2.5">
-        <h2 className="t-h3 m-0">Deliveries · {deliveries.length}</h2>
-        <button type="button" onClick={() => p.onCreating(true)} className={btnPrimary}>
-          New delivery
-        </button>
+      <div className="flex flex-none flex-col gap-3.5 px-[18px] pt-[22px] pb-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="m-0 text-[22px] font-semibold tracking-[-0.01em]">Deliveries</h2>
+          <span className="text-[12px] text-ink-muted">{deliveries.length} on the board</span>
+        </div>
+        <label className="flex h-11 items-center gap-2.5 rounded-[14px] border border-border bg-surface-100 px-3.5">
+          <Search size={17} strokeWidth={1.8} className="flex-none text-ink-muted" aria-hidden="true" />
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search delivery, customer, truck or driver"
+            aria-label="Search deliveries"
+            className="min-w-0 flex-1 border-0 bg-transparent text-[13px] text-ink outline-none"
+          />
+        </label>
+        <div role="group" aria-label="Filter deliveries" className="flex gap-0.5 overflow-x-auto rounded-[14px] border border-border bg-surface-100 p-1 [&>*]:flex-none">
+          {truckChip && (
+            <button
+              type="button"
+              onClick={p.onClearTruck}
+              aria-label={`Remove truck filter ${truckChip}`}
+              className="flex items-center gap-1.5 rounded-[10px] border-0 bg-ink px-2.5 text-[12.5px] font-medium text-surface-100"
+              style={{ minHeight: 34 }}
+            >
+              {truckChip} <span aria-hidden="true">×</span>
+            </button>
+          )}
+          {headerChip && (
+            <button type="button" onClick={() => p.onFilter('all')} aria-label={`Remove filter ${headerChip}`} className="flex items-center gap-1.5 rounded-[10px] border-0 bg-brand px-2.5 text-[12.5px] font-medium text-brand-ink" style={{ minHeight: 34 }}>
+              {headerChip} <span aria-hidden="true">×</span>
+            </button>
+          )}
+          {CHIPS.map(([k, label]) => {
+            const on = p.filter === k;
+            const n = k === 'all' ? byTruck.length : byTruck.filter((d) => d.status === k).length;
+            if (k !== 'all' && n === 0 && !on) return null;
+            return (
+              <button
+                key={k}
+                type="button"
+                aria-pressed={on}
+                onClick={() => p.onFilter(k)}
+                className="flex items-center gap-1.5 rounded-[10px] border-0 px-2.5 text-[12.5px] font-medium whitespace-nowrap"
+                style={{ background: on ? 'var(--brand)' : 'transparent', color: on ? 'var(--brand-ink)' : 'var(--ink)', minHeight: 34, minWidth: 0 }}
+              >
+                {label}
+                <span className="rounded-md px-1.5 text-[10.5px]" style={{ background: on ? 'rgb(0 0 0 / .1)' : 'var(--surface-200)' }}>
+                  {n}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
-      <div role="group" aria-label="Filter deliveries" className="flex gap-2 overflow-x-auto border-b border-divider px-3 py-2.5 [&>*]:flex-none">
-        {truckChip && (
-          <button
-            type="button"
-            onClick={p.onClearTruck}
-            aria-label={`Remove truck filter ${truckChip}`}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-full border-2 border-accent bg-accent-bg px-3 text-[13px] font-semibold text-ink"
-          >
-            Truck {truckChip} <span aria-hidden="true">×</span>
-          </button>
-        )}
-        {headerChip && (
-          <button type="button" onClick={() => p.onFilter('all')} aria-label={`Remove filter ${headerChip}`} className={chipCls(true)}>
-            {headerChip} <span aria-hidden="true">×</span>
-          </button>
-        )}
-        {CHIPS.map(([k, label]) => (
-          <button key={k} type="button" aria-pressed={p.filter === k} onClick={() => p.onFilter(k)} className={chipCls(p.filter === k)}>
-            {label}
-            <span className="t-mono-sm">
-              {k === 'all' ? byTruck.length : k === 'attention' ? byTruck.filter((d) => p.attentionIds.has(d.id)).length : byTruck.filter((d) => d.status === k).length}
-            </span>
-          </button>
-        ))}
-      </div>
-      <ul ref={listRef} aria-label="Delivery list" className="scroll-pad m-0 min-h-0 flex-1 list-none overflow-auto p-0">
+      <ul ref={listRef} aria-label="Delivery list" className="scroll-pad m-0 flex min-h-0 flex-1 list-none flex-col gap-2.5 overflow-auto px-3 py-3">
         {list.map((d) => {
           const ex = p.exp === d.id;
           const detail = ex ? p.detailOf(d.id) : undefined;
@@ -220,8 +251,8 @@ export function DeliveryList(p: Props) {
               detail={detail}
               line2={line2(d)}
               due={dueLine(d, config.timezone, config.locale, now)}
-              dueState={dueState(d, now)}
-              flag={p.attentionIds.has(d.id) ? 'Needs attention' : null}
+              dueState={null}
+              flag={null}
               selected={p.sel === d.id}
               expanded={ex}
               config={config}
@@ -286,6 +317,16 @@ export function DeliveryList(p: Props) {
           </li>
         )}
       </ul>
+      <div className="flex-none px-[18px] pt-2 pb-[18px]">
+        <button
+          type="button"
+          onClick={() => p.onCreating(true)}
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-[14px] border-0 bg-ink text-[14px] font-medium text-surface-100 hover:opacity-90"
+        >
+          <Plus size={17} strokeWidth={1.8} aria-hidden="true" />
+          New delivery
+        </button>
+      </div>
     </>
   );
 }

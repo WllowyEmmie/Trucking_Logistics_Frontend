@@ -3,8 +3,6 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { ChevronDown, Download, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { AccountMenu } from '@/components/auth/AccountMenu';
-import { DispatchNav } from '@/components/console/DispatchNav';
 import { btnSecondary, chipCls, inputCls } from '@/components/console/ui';
 import { ProofView } from '@/components/console/ProofView';
 import { StatusPill } from '@/components/StatusPill';
@@ -26,7 +24,8 @@ export function HistoryView() {
   const [from, setFrom] = useState(() => zonedDay(tz, 6));
   const [to, setTo] = useState(() => zonedDay(tz, 0));
   const [typed, setTyped] = useState('');
-  const [q, setQ] = useState('');
+  // ?q= from a link elsewhere (a truck's history in Fleet) starts the search with it.
+  const [q, setQ] = useState(() => (typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('q') ?? '') : ''));
   const [open, setOpen] = useState<string | null>(null);
 
   // Search as you type, without a request per key.
@@ -80,18 +79,12 @@ export function HistoryView() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-surface-200 text-ink">
-      <header className="sticky top-0 z-[5] flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-border bg-surface-100 px-6 py-3">
+    <div className="flex min-h-full flex-col bg-surface-200 text-ink">
+      <header className="sticky top-0 z-[5] flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-divider bg-surface-100 px-6 py-3">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           <div className="flex flex-col">
-            <span className="t-label text-ink-muted">{config.operator_name} · Dispatch</span>
-            <h1 className="t-h1 m-0">History</h1>
+            <h1 className="m-0 text-[22px] font-semibold tracking-[-0.01em]">History</h1>
           </div>
-          <DispatchNav current="/console/history" />
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <span aria-hidden="true" className="h-6 border-s border-divider" />
-          <AccountMenu />
         </div>
       </header>
 
@@ -185,12 +178,6 @@ export function HistoryView() {
             </div>
           )}
         </div>
-        {rows.length > 0 && (
-          <span className="t-body-sm text-ink-muted">
-            Showing {rows.length}
-            {query.hasNextPage ? ', more below' : ''}.
-          </span>
-        )}
       </main>
     </div>
   );

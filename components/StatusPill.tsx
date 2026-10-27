@@ -35,7 +35,8 @@ export interface StatusPillProps {
 
 export function StatusPill({ status, size = 'md', label }: StatusPillProps) {
   const v = VAR[status];
-  const [h, fs, px, dot, gap] = SIZE[size];
+  const [h, fs, px, , gap] = SIZE[size];
+  const hollow = HOLLOW.has(status);
   const fg = `var(${v})`;
   const style: CSSProperties = {
     display: 'inline-flex',
@@ -43,30 +44,21 @@ export function StatusPill({ status, size = 'md', label }: StatusPillProps) {
     gap,
     height: h,
     paddingInline: px,
-    borderRadius: 999,
-    border: `1px solid ${fg}`,
+    borderRadius: 7,
+    border: `1px ${hollow ? 'dashed' : 'solid'} color-mix(in srgb, ${fg} ${hollow ? 55 : 35}%, transparent)`,
     background: `var(${v}-bg)`,
     color: fg,
     fontFamily: 'var(--font-sans)',
     fontSize: fs,
-    fontWeight: 600,
+    fontWeight: 500,
     lineHeight: 1,
     whiteSpace: 'nowrap',
     flex: 'none',
   };
   return (
     <span style={style}>
-      <span
-        aria-hidden="true"
-        style={{
-          width: dot,
-          height: dot,
-          borderRadius: 999,
-          background: HOLLOW.has(status) ? 'transparent' : fg,
-          border: `2px solid ${fg}`,
-          flex: 'none',
-        }}
-      />
+      {/* The badge's look from the design: tinted fill and edge, no dot. Hollow statuses (nothing
+          moving) keep a dashed edge so they don't read as the coloured ones. */}
       {label ?? STATUS_LABEL[status]}
     </span>
   );

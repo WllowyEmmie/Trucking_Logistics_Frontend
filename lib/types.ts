@@ -428,3 +428,33 @@ export interface Proposal {
   /** "dispatcher", "agent", or "system: <reason>" when a stale approve expired it. */
   decided_by: string | null;
 }
+// ---- Messages (internal/db/messages_manual.go): one thread per driver with dispatch ----
+
+export interface Message {
+  id: string;
+  driver_id: string;
+  /** True when the driver wrote it; false for dispatch. */
+  from_driver: boolean;
+  /** The dispatcher's or the driver's name. */
+  sender: string;
+  body: string;
+  created_at: string;
+  /** When the other side opened it. */
+  read_at: string | null;
+}
+
+/** GET /messages: a driver's thread as the console lists it. */
+export interface MessageThread {
+  driver_id: string;
+  driver_name: string;
+  last: Message;
+  /** The driver's messages dispatch hasn't opened. */
+  unread: number;
+}
+
+/** GET /drivers/{id}/messages and GET /auth/me/messages. */
+export interface ThreadResponse {
+  messages: Message[];
+  /** The other side's messages not yet opened. */
+  unread: number;
+}

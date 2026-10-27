@@ -2,7 +2,8 @@
 
 import L from 'leaflet';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { MapContainer, TileLayer, useMap } from 'react-leaflet';
+import { MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet';
+import { calloutIcon, consoleStopIcon, consoleTruckIcon, consoleTruckKey } from './markers';
 import { LinkLine, RouteLine } from './RouteLine';
 import { StopPin } from './StopPin';
 import { TruckMarker } from './TruckMarker';
@@ -10,7 +11,7 @@ import type { DispatchMapProps, LatLng } from './types';
 
 const overlayBox = 'absolute z-[1000] rounded-md border border-border bg-[var(--map-label-bg)] text-[var(--map-ink)]';
 
-function Fit({ fitKey, points }: { fitKey?: string; points?: LatLng[] }) {
+function Fit({ fitKey, points, pad }: { fitKey?: string; points?: LatLng[]; pad?: { tl: [number, number]; br: [number, number] } }) {
   const map = useMap();
   const pointsRef = useRef(points);
   pointsRef.current = points;
@@ -19,8 +20,11 @@ function Fit({ fitKey, points }: { fitKey?: string; points?: LatLng[] }) {
     const fit = () => {
       const p = pointsRef.current;
       if (!p?.length) return;
+      const size = map.getSize();
+      // The floating card's room only when the map is wide enough to spare it.
+      const room = pad && size.x > 700 ? { paddingTopLeft: pad.tl, paddingBottomRight: pad.br } : { padding: [56, 56] as [number, number] };
       if (p.length === 1) map.setView([p[0]!.lat, p[0]!.lng], Math.max(map.getZoom(), 12));
-      else map.fitBounds(L.latLngBounds(p.map((x) => [x.lat, x.lng] as [number, number])), { padding: [56, 56], maxZoom: 14 });
+      else map.fitBounds(L.latLngBounds(p.map((x) => [x.lat, x.lng] as [number, number])), { ...room, maxZoom: 14 });
     };
     fit();
     // A fit made while hidden (a tab at 0×0) is meaningless: redo it once the map has a size.
@@ -67,6 +71,68 @@ function AutoResize({ el }: { el: HTMLElement | null }) {
   return null;
 }
 
+const TILES = {
+  street: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', attr: 'Tiles &copy; Esri' },
+  satellite: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: 'Imagery &copy; Esri' },
+  dark: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', attr: 'Tiles &copy; Esri' },
+} as const;
+
+const pts = (a: LatLng[]) => a.map((x) => [x.lat, x.lng] as [number, number]);
+
+/** The console design's layers: route solid where driven and dashed ahead, end dots, callouts. */
+function ConsoleLayers(p: DispatchMapProps) {
+  const dark = !!p.dark;
+  const accent = p.accent ?? '#2F7CF6';
+  const rest = dark ? '#F2F2EF' : '#151515';
+  const stops = p.stops ?? [];
+  const first = stops[0];
+  const last = stops.length > 1 ? stops[stops.length - 1] : undefined;
+  return (
+    <>
+      {p.route && p.route.travelled.length > 1 && (
+        <Polyline positions={pts(p.route.travelled)} pathOptions={{ color: accent, weight: 4, opacity: 1, lineCap: 'round', interactive: false }} />
+      )}
+      {p.route && p.route.remaining.length > 1 && (
+        <Polyline positions={pts(p.route.remaining)} pathOptions={{ color: rest, weight: 2.5, dashArray: '6 8', lineCap: 'round', interactive: false }} />
+      )}
+      {p.links?.map((l, i) => (
+        <Polyline key={i} positions={pts([l.a, l.b])} pathOptions={{ color: rest, weight: 2, dashArray: '2 6', lineCap: 'round', interactive: false }} />
+      ))}
+      {stops.map((s) => (
+        <Marker
+          key={s.id}
+          position={[s.lat, s.lng]}
+          icon={consoleStopIcon(s, s === first ? 'first' : s === last ? 'last' : null, dark, accent)}
+          title={`${s.kind === 'pickup' ? 'Pickup' : 'Drop-off'}, stop ${s.n}${s.done ? ', done' : ''}`}
+          interactive={false}
+          keyboard={false}
+          zIndexOffset={200}
+        />
+      ))}
+      {p.callouts && first?.address && <Marker position={[first.lat, first.lng]} icon={calloutIcon(first.address, true)} interactive={false} keyboard={false} />}
+      {p.callouts && last?.address && <Marker position={[last.lat, last.lng]} icon={calloutIcon(last.address, false)} interactive={false} keyboard={false} />}
+      {p.trucks?.map((t) => (
+        <TruckMarker
+          key={t.id}
+          truck={t}
+          seconds={p.animateSeconds}
+          onClick={p.onTruck}
+          makeIcon={(x) => consoleTruckIcon(x, dark, accent)}
+          iconKey={consoleTruckKey(t, dark, accent)}
+        />
+      ))}
+    </>
+  );
+}
+
+function OnMap({ fn }: { fn?: (m: L.Map) => void }) {
+  const map = useMap();
+  useEffect(() => {
+    fn?.(map);
+  }, [map, fn]);
+  return null;
+}
+
 function LegendItem({ swatch, children }: { swatch: ReactNode; children: ReactNode }) {
   return (
     <span className="inline-flex items-center gap-1.5">
@@ -96,16 +162,20 @@ export default function DispatchMap(p: DispatchMapProps) {
         className="h-full w-full"
         aria-label={p.ariaLabel ?? 'Map'}
       >
-        <TileLayer
-          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          maxZoom={19}
-        />
-        {p.route && <RouteLine route={p.route} />}
-        {p.links?.map((l, i) => <LinkLine key={i} link={l} />)}
-        {p.stops?.map((s) => <StopPin key={s.id} stop={s} />)}
-        {p.trucks?.map((t) => <TruckMarker key={t.id} truck={t} seconds={p.animateSeconds} onClick={p.onTruck} />)}
-        <Fit fitKey={p.fitKey} points={p.fitPoints} />
+        {/* Esri's tiles, as in the console design. key: swapping the layer replaces it cleanly. */}
+        <TileLayer key={p.tiles ?? 'street'} url={TILES[p.tiles ?? 'street'].url} attribution={TILES[p.tiles ?? 'street'].attr} maxZoom={19} />
+        {p.variant === 'console' ? (
+          <ConsoleLayers {...p} />
+        ) : (
+          <>
+            {p.route && <RouteLine route={p.route} />}
+            {p.links?.map((l, i) => <LinkLine key={i} link={l} />)}
+            {p.stops?.map((s) => <StopPin key={s.id} stop={s} />)}
+            {p.trucks?.map((t) => <TruckMarker key={t.id} truck={t} seconds={p.animateSeconds} onClick={p.onTruck} />)}
+          </>
+        )}
+        <OnMap fn={p.onMap} />
+        <Fit fitKey={p.fitKey} points={p.fitPoints} pad={p.fitPadding} />
         <Recenter center={p.center} zoom={p.zoom} hasFit={!!p.fitPoints?.length} />
         <AutoResize el={wrap} />
       </MapContainer>
@@ -149,6 +219,8 @@ export default function DispatchMap(p: DispatchMapProps) {
           ))}
         </div>
       )}
+
+      {p.children}
 
       {p.legend && (
         <div

@@ -5,37 +5,37 @@
 
 :root {
   /* surfaces */
-  --surface-100: #fafaf9;
-  --surface-200: #f1f1ef;
-  --surface-300: #e6e6e3;
+  --surface-100: #ffffff;
+  --surface-200: #f7f7f6;
+  --surface-300: #ececea;
 
   /* text */
-  --ink: #1a1d24;
-  --ink-muted: #555d6b;
-  --ink-subtle: #757d8a;   /* 18px+ or 14px bold+ ONLY — fails 4.5:1 at body size */
+  --ink: #151515;
+  --ink-muted: #6e6e6a;
+  --ink-subtle: #8e8e8a;   /* 18px+ or 14px bold+ ONLY — fails 4.5:1 at body size */
 
   /* lines */
-  --border: #8a8a85;       /* functional boundaries — meets 3:1 */
-  --divider: #dededa;      /* decorative only — does NOT meet 3:1 */
+  --border: #d6d6d2;       /* functional boundaries — meets 3:1 */
+  --divider: #ececea;      /* decorative only — does NOT meet 3:1 */
 
   /* accent */
-  --accent: #8a5a00;
-  --accent-bg: #faf1de;
-  --focus-ring: #1f5b99;
+  --accent: #8a6400;
+  --accent-bg: #fff8dd;
+  --focus-ring: #2f6fe0;
 
   /* delivery status */
-  --status-pending: #555d6b;
-  --status-pending-bg: #f0f1f3;
-  --status-assigned: #1f5b99;
-  --status-assigned-bg: #e7f0f9;
-  --status-transit: #8a5a00;
-  --status-transit-bg: #faf1de;
-  --status-completed: #1e6b47;
-  --status-completed-bg: #e6f2ec;
-  --status-cancelled: #4a4a52;
-  --status-cancelled-bg: #eeeef0;
-  --status-failed: #a3281e;
-  --status-failed-bg: #fbeae8;
+  --status-pending: #6e6e6a;
+  --status-pending-bg: #f2f2ef;
+  --status-assigned: #9a7300;
+  --status-assigned-bg: #fff7d6;
+  --status-transit: #2f6fe0;
+  --status-transit-bg: #eaf2ff;
+  --status-completed: #1e9a55;
+  --status-completed-bg: #e9f8ef;
+  --status-cancelled: #6e6e6a;
+  --status-cancelled-bg: #f2f2ef;
+  --status-failed: #d14343;
+  --status-failed-bg: #fdecec;
 
   /* truck status — aliases of the delivery statuses they share meaning with */
   --truck-available: var(--status-completed);
@@ -48,10 +48,10 @@
   --truck-offline-bg: var(--status-pending-bg);
 
   /* map markers — these sit on OSM tiles, not on a system surface */
-  --marker-truck: #8a5a00;
-  --marker-pickup: #1a1d24;
-  --marker-dropoff: #1f5b99;
-  --marker-stale: #757d8a;
+  --marker-truck: #2f6fe0;
+  --marker-pickup: #151515;
+  --marker-dropoff: #2f6fe0;
+  --marker-stale: #8e8e8a;
 
   /* map tiles — the OSM stand-in palette. Tiles stay light in both themes,
    * so map labels use --map-ink / --map-label-bg, which .dark does NOT override. */
@@ -72,10 +72,20 @@
   --ink-annotation: #3d424c;
 
   /* attention and agent */
-  --attention: #a3281e;
-  --attention-bg: #fbeae8;
-  --agent: #5c3d99;
+  --attention: #d14343;
+  --attention-bg: #fdecec;
+  --agent: #6b4fc4;
   --agent-bg: #f1edf9;
+
+
+  /* the Linehaul look: the yellow brand, the dark frame around the console, card shadow */
+  --brand: #ffcf33;
+  --brand-ink: #151515;
+  --frame: #161616;
+  --side-text: #ededea;
+  --side-muted: #8d8d89;
+  --side-hover: #232323;
+  --shadow-card: 0 10px 30px rgb(20 20 20 / 0.08);
 
   /* spacing */
   --space-1: 4px;
@@ -87,9 +97,9 @@
   --space-7: 48px;
 
   /* radius */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
   --radius-pill: 999px;
 
   /* sizes — these are accessibility floors, not suggestions */
@@ -101,48 +111,53 @@
   --pane-min: 280px;
 
   /* type */
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
 }
 
 .dark {
-  --surface-100: #16181d;
-  --surface-200: #1e2128;
-  --surface-300: #262a33;
+  --surface-100: #1c1c1c;
+  --surface-200: #141414;
+  --surface-300: #262626;
 
-  --ink: #f2f3f5;
-  --ink-muted: #a8aeb8;
-  --ink-subtle: #858c97;
+  --ink: #f2f2ef;
+  --ink-muted: #a3a39e;
+  --ink-subtle: #8a8a86;
 
-  --border: #6e747e;
-  --divider: #2e323b;
+  --border: #3a3a3a;
+  --divider: #262626;
 
-  --accent: #e0a94a;
-  --accent-bg: #2e2413;
-  --focus-ring: #7bb0e8;
+  --accent: #ffcf33;
+  --accent-bg: #1e1b10;
+  --focus-ring: #86b4ff;
 
-  --status-pending: #a8aeb8;
-  --status-pending-bg: #242830;
-  --status-assigned: #7bb0e8;
-  --status-assigned-bg: #16293d;
-  --status-transit: #e0a94a;
-  --status-transit-bg: #2e2413;
-  --status-completed: #5fc494;
-  --status-completed-bg: #142d22;
-  --status-cancelled: #9296a0;
-  --status-cancelled-bg: #232631;
-  --status-failed: #e8837a;
-  --status-failed-bg: #33191a;
+  --status-pending: #a3a39e;
+  --status-pending-bg: #232323;
+  --status-assigned: #ffd75a;
+  --status-assigned-bg: rgba(255,207,51,.12);
+  --status-transit: #86b4ff;
+  --status-transit-bg: rgba(47,124,246,.14);
+  --status-completed: #6fe0a0;
+  --status-completed-bg: rgba(30,154,85,.14);
+  --status-cancelled: #8a8a86;
+  --status-cancelled-bg: #232323;
+  --status-failed: #ff8a8a;
+  --status-failed-bg: rgba(209,67,67,.15);
 
-  --marker-truck: #e0a94a;
-  --marker-pickup: #f2f3f5;
-  --marker-dropoff: #7bb0e8;
-  --marker-stale: #858c97;
+  --marker-truck: #ffcf33;
+  --marker-pickup: #f2f2ef;
+  --marker-dropoff: #86b4ff;
+  --marker-stale: #8a8a86;
 
-  --attention: #e8837a;
-  --attention-bg: #33191a;
+  --attention: #ff8a8a;
+  --attention-bg: rgba(209,67,67,.15);
   --agent: #b49ae0;
   --agent-bg: #231b33;
+
+  --frame: #0b0b0b;
+  --side-hover: #1a1a1a;
+  --side-muted: #7a7a76;
+  --shadow-card: 0 12px 32px rgb(0 0 0 / 0.5);
 }
 
 /* ---- Tailwind v4: expose tokens as utilities ----
@@ -179,6 +194,9 @@
   --color-attention-bg: var(--attention-bg);
   --color-agent: var(--agent);
   --color-agent-bg: var(--agent-bg);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-frame: var(--frame);
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);

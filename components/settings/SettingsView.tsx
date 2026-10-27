@@ -3,9 +3,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Building2, FileSignature, Globe2, Map as MapIcon, Palette, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { createContext, useContext, useEffect, useId, useMemo, useState, type ReactNode } from 'react';
-import { AccountMenu } from '@/components/auth/AccountMenu';
 import { AddressFinder } from '@/components/console/AddressFinder';
-import { DispatchNav } from '@/components/console/DispatchNav';
 import { btnPrimary, btnSecondary, inputCls, textareaCls } from '@/components/console/ui';
 import { DispatchMap } from '@/components/map';
 import { PhoneInput } from '@/components/PhoneInput';
@@ -524,18 +522,12 @@ export function SettingsView() {
   const busy = save.kind === 'checking' || save.kind === 'saving';
 
   return (
-    <div className="flex min-h-dvh flex-col bg-surface-200 text-ink">
-      <header className="sticky top-0 z-[5] flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-border bg-surface-100 px-6 py-3">
+    <div className="flex min-h-full flex-col bg-surface-200 text-ink">
+      <header className="sticky top-0 z-[5] flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-divider bg-surface-100 px-6 py-3">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           <div className="flex flex-col">
-            <span className="t-label text-ink-muted">{c.operator_name} · Dispatch</span>
-            <h1 className="t-h1 m-0">Settings</h1>
+            <h1 className="m-0 text-[22px] font-semibold tracking-[-0.01em]">Settings</h1>
           </div>
-          <DispatchNav current="/console/settings" />
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <span aria-hidden="true" className="h-6 border-s border-divider" />
-          <AccountMenu />
         </div>
       </header>
 

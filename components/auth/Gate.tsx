@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { useMe, type Me } from '@/lib/auth';
-import { DispatcherSignIn, DriverSignIn } from './SignIn';
+import { ChooseDriverPin, DispatcherSignIn, DriverSignIn } from './SignIn';
 
 const MeContext = createContext<Me | null>(null);
 
@@ -69,5 +69,6 @@ export function DriverGate({ children }: { children: ReactNode }) {
     return <Unreachable onRetry={() => void q.refetch()} />;
   }
   if (!me || me.role !== 'driver') return <DriverSignIn />;
+  if (me.must_change_pin) return <ChooseDriverPin name={me.name} />;
   return <MeContext.Provider value={me}>{children}</MeContext.Provider>;
 }

@@ -14,7 +14,12 @@ export interface Me {
   /** Drivers: on shift (GPS runs only then), and since when. */
   on_shift?: boolean;
   shift_since?: string | null;
+  /** Drivers still on the default PIN (1234): the app asks for their own before anything else. */
+  must_change_pin?: boolean;
 }
+
+/** POST /auth/me/pin: the driver chooses their PIN. Returns who they are, now on shift. */
+export const changeMyPin = (pin: string) => post<Me>('/auth/me/pin', { pin });
 
 export const ME_KEY = ['me'] as const;
 
@@ -29,7 +34,9 @@ export async function fetchMe(): Promise<Me | null> {
 }
 
 export function useMe() {
-  return useQuery({ queryKey: ME_KEY, queryFn: fetchMe, staleTime: 5 * 60_000, retry: 1 });
+  // Always rechecked when a gate mounts: the console and the driver app sign in separately, so who
+  // "me" is depends on which one this tab just moved to.
+  return useQuery({ queryKey: ME_KEY, queryFn: fetchMe, staleTime: 5 * 60_000, retry: 1, refetchOnMount: 'always' });
 }
 
 /** The session is an HttpOnly cookie set by the API: this page never sees the token. */

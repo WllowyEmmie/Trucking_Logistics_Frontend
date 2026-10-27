@@ -11,6 +11,7 @@ import { dueProblem, zonedInputToIso } from '@/lib/due';
 import type { CreateDeliveryRequest, CreateDeliveryResponse } from '@/lib/types';
 import { AddressFinder } from './AddressFinder';
 import { inputCls } from './ui';
+import { confirmDialog } from '@/components/Confirm';
 
 interface Props {
   config: AppConfig;
@@ -224,7 +225,8 @@ export function NewDeliveryForm({ config, onCreated, onCancel }: Props) {
       onSubmit={submit}
       onKeyDown={(e) => {
         if (e.key !== 'Escape') return;
-        if (!dirty || window.confirm('Discard this delivery? What you typed will be lost.')) onCancel();
+        if (!dirty) return onCancel();
+        void confirmDialog({ title: 'Discard this delivery?', body: 'What you typed will be lost.', confirm: 'Discard', danger: true }).then((ok) => ok && onCancel());
       }}
       noValidate
       aria-label="New delivery"

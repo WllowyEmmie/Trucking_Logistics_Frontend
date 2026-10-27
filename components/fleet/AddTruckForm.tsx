@@ -78,7 +78,6 @@ export function AddTruckForm({ trucks, onAdded }: Props) {
 
   return (
     <form onSubmit={submit} noValidate aria-label="Add a truck" className={formCls}>
-      <h2 className="t-h1 m-0">Add a truck</h2>
       <FormResult
         error={add.error ?? statusErr}
         ok={ok}

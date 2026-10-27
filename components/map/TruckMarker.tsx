@@ -10,12 +10,26 @@ import type { MapTruck } from './types';
  * Glides from wherever the marker is now to the latest ping over one ping interval.
  * It trails the latest ping by at most one interval and never jumps.
  */
-export function TruckMarker({ truck, seconds, onClick }: { truck: MapTruck; seconds: number; onClick?: (id: string) => void }) {
+export function TruckMarker({
+  truck,
+  seconds,
+  onClick,
+  makeIcon,
+  iconKey,
+}: {
+  truck: MapTruck;
+  seconds: number;
+  onClick?: (id: string) => void;
+  /** Another look (the console design's pins); `iconKey` says when to rebuild it. */
+  makeIcon?: (t: MapTruck) => L.DivIcon;
+  iconKey?: string;
+}) {
   const ref = useRef<L.Marker | null>(null);
   // Leaflet owns the position after mount; the prop is only the starting point.
   const [initial] = useState<[number, number]>(() => [truck.lat, truck.lng]);
-  const key = truckIconKey(truck);
-  const icon = useMemo(() => truckIcon(truck), [key]);
+  const key = iconKey ?? truckIconKey(truck);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const icon = useMemo(() => (makeIcon ?? truckIcon)(truck), [key]);
 
   useEffect(() => {
     const m = ref.current;
