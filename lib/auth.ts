@@ -45,7 +45,11 @@ export const driverSignIn = (phone: string, pin: string) => post<Me>('/auth/driv
 
 export async function signOut(qc: QueryClient) {
   await post('/auth/logout').catch(() => undefined);
-  // Nothing from the last person may stay on screen for the next.
-  qc.clear();
+  // Signed out first: the gate is watching "me", so this shows the sign-in page at once.
+  // (Not qc.clear() before it: that unhooks the gate from the cache, and the old "me" stays on
+  // screen until a reload.)
+  await qc.cancelQueries();
   qc.setQueryData(ME_KEY, null);
+  // Then nothing from the last person may stay in memory for the next.
+  qc.removeQueries({ predicate: (q) => q.queryKey[0] !== ME_KEY[0] });
 }
