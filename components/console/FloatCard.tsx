@@ -1,7 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 /**
  * A small floating card next to the button that opened it (like the card over the map): settings,
@@ -27,21 +27,36 @@ export function FloatCard({
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   // Under the button, right edges lined up; kept on screen, and above the button if it won't fit below.
-  useEffect(() => {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const w = Math.min(width, vw - 24);
-    const h = ref.current?.offsetHeight ?? 300;
-    const r = anchor ?? new DOMRect(vw / 2, 80, 0, 0);
-    if (place === 'beside') {
-      setPos({ left: Math.max(12, Math.min(r.right + 12, vw - w - 12)), top: Math.max(12, Math.min(r.bottom - h, vh - h - 12)) });
-      return;
-    }
-    const left = Math.max(12, Math.min(r.right - w, vw - w - 12));
-    let top = r.bottom + 8;
-    if (top + h > vh - 12) top = Math.max(12, r.top - h - 8);
-    setPos({ top, left });
-  }, [anchor, width, place, children]);
+  // Measured again whenever the card's own size changes (a form swapping to a taller result, say),
+  // not only when the parent re-renders: otherwise a taller card hangs off the bottom until then.
+  useLayoutEffect(() => {
+    const place_ = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const w = Math.min(width, vw - 24);
+      const h = ref.current?.offsetHeight ?? 300;
+      const r = anchor ?? new DOMRect(vw / 2, 80, 0, 0);
+      let next: { top: number; left: number };
+      if (place === 'beside') {
+        next = { left: Math.max(12, Math.min(r.right + 12, vw - w - 12)), top: Math.max(12, Math.min(r.bottom - h, vh - h - 12)) };
+      } else {
+        const left = Math.max(12, Math.min(r.right - w, vw - w - 12));
+        let top = r.bottom + 8;
+        if (top + h > vh - 12) top = Math.max(12, r.top - h - 8);
+        next = { top, left };
+      }
+      setPos((p) => (p && p.top === next.top && p.left === next.left ? p : next));
+    };
+    place_();
+    const el = ref.current;
+    const ro = el ? new ResizeObserver(place_) : null;
+    if (el) ro!.observe(el);
+    window.addEventListener('resize', place_);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', place_);
+    };
+  }, [anchor, width, place]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
